@@ -1,13 +1,13 @@
 # Copyright (c) EGOGE - All Rights Reserved.
 # This software may be used and distributed according to the terms of the GPL-3.0 license.
-import re
 import json
+import time
 from typing import Dict, List, Optional
 
-from language_model import TranslatorModel
+from models.language_model import TranslatorModel
 from languages import Language
-from translation_text import TranslationText
-from translation import Translation
+from translation import Translation, MISSING_TRANSLATION
+from translation_request import TranslationRequest
 
 class TranslationService:
 
@@ -18,66 +18,75 @@ class TranslationService:
         self.glossary = glossary
 
     def translate(self, from_language: Language, from_texts: List[str], to_languages: Optional[List[Language]]) -> str:
-        translation_texts = []
+        translations = []
         for from_text in from_texts:
-            translation_text = self.prepare_text_for_translation(orig_text=from_text)
-            translation_texts.append(translation_text)
+            translation = self.prepare_text_for_translation(orig_text=from_text)
+            translations.append(translation)
 
-        translation = Translation(from_language=from_language, translation_textss=translation_texts, to_languages=to_languages)
-        self.model.translate(translation=translation)
+        translation_request = TranslationRequest(from_language=from_language, translations=translations, to_languages=to_languages)
+        
+        start_time = time.time() 
+        self.model.translate(translation_request=translation_request)
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        self.log_info(f"Finished translation of {len(from_texts)} texts from {from_language} to {len(translation_request.get_to_languages())} languages in {elapsed_time:.2f} seconds.")
 
-        results = []
-        for translation_text in translation_texts:
-            translations = [
+        return self.generate_json_respsonse(translations=translations, from_language=from_language, to_languages=translation_request.get_to_languages())
+    
+    def generate_json_respsonse(self, translations: List[Translation], from_language: Language, to_languages: List[Language]) -> str:
+        results = []        
+        for translation in translations:
+            translations_per_language = [
                 {
-                    'language': lang.value, 
-                    'translation': self.restore_text_from_translation(translation_text.get_translation(langugae=lang), translation_text)
+                    'language': lang.get_language_type(), 
+                    'translation': self.restore_text_from_translation(translation=translation, to_language=lang)
                 }
                 for lang in to_languages]
             
             result = {
-                'from_text': translation_text.original_text,
-                'translation_per_language': translations
+                'from_text': translation.get_text_to_translate(),
+                'from_language': from_language.get_language_type(),
+                'translation_per_language': translations_per_language
             }
             results.append(result)
 
         return json.dumps(results, indent=2)
 
-    def restore_placeholders(self, translated_text: str, token_map):
-        for token, placeholder in token_map.items():
-            translated_text = translated_text.replace(token, placeholder)
-        return translated_text
+
+    def log_info(self, messsage: str):
+        if self.logging is None: 
+            print(messsage)
+        else:
+            self.logging.info(messsage)
     
-    def prepare_text_for_translation(self, orig_text: str) -> TranslationText:
+    def prepare_text_for_translation(self, orig_text: str) -> Translation:
         used_glossary = {}
         
-        ajusted_text = orig_text
+        adjusted_text = orig_text
 
         # Apply glossary substitutions if they appear in the text
         for term, placeholder in self.glossary.items():
-            if term in ajusted_text:
+            if term in adjusted_text:
                 used_glossary[placeholder] = term
-                ajusted_text = ajusted_text.replace(term, placeholder)
+                adjusted_text = adjusted_text.replace(term, placeholder)
         
         # Protect placeholders
-        placeholders = re.findall(r'\{\d+\}', ajusted_text)
-        for i, placeholder in enumerate(placeholders):
-            token = f"PLACEHOLDER_{i}"
-            used_glossary[token] = placeholder
-            ajusted_text = ajusted_text.replace(placeholder, token)
+        adjusted_text = self.model.encode_placeholders(text=adjusted_text, glossary=used_glossary)
         
-        return TranslationText(orig_text=orig_text, ajusted_text=ajusted_text, glossary=used_glossary)
+        return Translation(original_text=orig_text, adjusted_text=adjusted_text, glossary=used_glossary)
 
-    def restore_text_from_translation(self, transalted_text: str, translation_text: TranslationText) -> str:
-        if not transalted_text:
+    def restore_text_from_translation(self, translation: Translation, to_language: Language) -> str:    
+        translated_text=translation.get_translated_text(language=to_language)   
+        if not translated_text or translated_text == MISSING_TRANSLATION:
             return "### NONE ###"
+        
+        print(f"Adjusting translation {translated_text} - To Languages: {to_language}")
        
         # Restore placeholders
-        for token, placeholder in translation_text.get_glossary().items():
-            transalted_text = transalted_text.replace(token, placeholder)
+        translated_text = self.model.encode_placeholders(text=translated_text, glossary=translation.get_glossary())
         
         # Restore glossary terms
-        for placeholder, term in translation_text.get_glossary().items():
-            transalted_text = transalted_text.replace(placeholder, term)
+        for placeholder, term in translation.get_glossary().items():
+            translated_text = translated_text.replace(placeholder, term)
         
-        return transalted_text
+        return translated_text

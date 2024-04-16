@@ -1,0 +1,20 @@
+{
+    "cache_dir": "~/tmp/ai_cache",
+    "from_language": "en_US",
+    "to_languages": [
+        "fr_FR",
+        "iw",
+        "en_GB"
+    ],
+    "glossary": [
+        {
+            "key": "EGOGE",
+            "value": "_EGOGE"
+        },
+        {
+            "key": "Ltd.",
+            "value": "_LTD"
+        }
+    ]
+}    
+

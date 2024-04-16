@@ -1,7 +1,8 @@
 # Copyright (c) EGOGE - All Rights Reserved.
 # This software may be used and distributed according to the terms of the GPL-3.0 license.
+from typing import Dict
 from abc import ABC, abstractmethod
-from translation import Translation
+from translation_request import TranslationRequest
 
 class TranslatorModel(ABC):
 
@@ -11,25 +12,31 @@ class TranslatorModel(ABC):
         self.cache_dir = cache_dir
 
     @abstractmethod
-    def translate(self, translation: Translation):
+    def translate(self, translation_request: TranslationRequest):
         """
-        Translates the texts in the specified 'translation'. 
-        The translated texts are stored directly in 'translation' via the Translation.add_translation() method.
+        Translates the texts specified in the 'translation' object. 
+        The translated texts are stored directly in the 'Translation' object via the Translation.add_translated_text() method.
 
         Parameters:
-        - translation (Translation): Stores the texts to translate and the list of Languages for translation.
+        - translation_request (TranslationRequest): Stores the texts to translate and the list of Languages for translation.
         """
         pass
 
-    def log_info(self, messsage: str):
+    def encode_placeholders(self, text: str, glossary: Dict[str, str]) -> str:
+        pass
+
+    def decode_placeholders(self, text: str, glossary: Dict[str, str]) -> str:
+        pass
+
+    def log_info(self, message: str):
         if self.logging is None: 
-            print(messsage)
+            print(message)
         else:
-            self.logging.info(messsage)
+            self.logging.info(message)
 
     
-    def log_error(self, messsage: str):
+    def log_error(self, message: str):
         if self.logging is None: 
-            print(messsage)
+            print(message)
         else:
-            self.logging.error(messsage)        
+            self.logging.error(message)        
