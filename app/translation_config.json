@@ -2,9 +2,27 @@
     "cache_dir": "~/tmp/ai_cache",
     "from_language": "en_US",
     "to_languages": [
+        "ar",
+        "de",
+        "el",
+        "en_GB",
+        "es",
+        "fr_CA",
+        "fr_CH",
         "fr_FR",
+        "it",
         "iw",
-        "en_GB"
+        "ja",
+        "ko",
+        "nl",
+        "pl",
+        "pt",
+        "ru",
+        "sv",
+        "th",
+        "tr",
+        "zh_CN",
+        "zh_HK"
     ],
     "glossary": [
         {

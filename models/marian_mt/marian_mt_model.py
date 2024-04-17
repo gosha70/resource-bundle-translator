@@ -9,19 +9,141 @@ from models.language_model import TranslatorModel
 from languages import Language
 from translation_request import TranslationRequest
 
-language_to_helsinki_map = {
-    Language.EN_GB: "uk",
-    Language.EN_US: "en",
-    Language.FR_CA: "fr",
-    Language.FR_CH: "fr",
-    Language.FR_FR: "fr",
-    Language. HE: "he",
-    Language.JA: "jap",
-    Language.TR: "trk",
-    Language.ZH_CH: "zh",
-    Language. ZH_HK: "zh"
-}    
-        
+
+opus_mt_language_models = {
+    Language.AR: {
+        "language_token": "ara",
+        "model_id": "ar",
+        "required_token": True,
+        "model_prefix": "opus-mt-"
+    },
+    Language.DE: {
+        "language_token": "deu",
+        "model_id": "gem",
+        "required_token": True,
+        "model_prefix": "opus-mt-"
+    },
+    Language.EL: {
+        "language_token": "el",
+        "model_id": "el",
+        "required_token": False,
+        "model_prefix": "opus-mt-"
+    },
+    Language.EN_GB: {
+        "language_token": "en",
+        "model_id": "en",
+        "required_token": False,
+        "model_prefix": "opus-mt-"
+    },
+    Language.EN_US: {
+        "language_token": "en",
+        "model_id": "en",
+        "required_token": False,
+        "model_prefix": "opus-mt-"
+    },
+    Language.ES: {
+        "language_token": "es",
+        "model_id": "ROMANCE",
+        "required_token": True,
+        "model_prefix": "opus-mt-"
+    },
+    Language.FR_CA: {
+        "language_token": "fr",
+        "model_id": "ROMANCE",
+        "required_token": True,
+        "model_prefix": "opus-mt-"
+    },
+    Language.FR_CH: {
+        "language_token": "fr",
+        "model_id": "ROMANCE",
+        "required_token": True,
+        "model_prefix": "opus-mt-"
+    },
+    Language.FR_FR: {
+        "language_token": "fr",
+        "model_id": "ROMANCE",
+        "required_token": True,
+        "model_prefix": "opus-mt-"
+    },
+    Language.IT: {
+        "language_token": "it",
+        "model_id": "ROMANCE",
+        "required_token": True,
+        "model_prefix": "opus-mt-"
+    },
+    Language.HE: {
+        "language_token": "he",
+        "model_id": "he",
+        "required_token": False,
+        "model_prefix": "opus-mt-"
+    },
+    Language.JA: {
+        "language_token": "jap",
+        "model_id": "jap",
+        "required_token": False,
+        "model_prefix": "opus-mt-"
+    },
+    Language.KO: {
+        "language_token": "ko",
+        "model_id": "ko",
+        "required_token": False,
+        "model_prefix": "opus-mt-tc-big-"
+    },
+    Language.NL: {
+        "language_token": "nld",
+        "model_id": "gem",
+        "required_token": True,
+        "model_prefix": "opus-mt-"
+    },
+    Language.PL: {
+        "language_token": "pol",
+        "model_id": "sla",
+        "required_token": True,
+        "model_prefix": "opus-mt-"
+    },
+    Language.PT: {
+        "language_token": "pt",
+        "model_id": "ROMANCE",
+        "required_token": True,
+        "model_prefix": "opus-mt-"
+    },
+    Language.RU: {
+        "language_token": "rus",
+        "model_id": "sla",
+        "required_token": True,
+        "model_prefix": "opus-mt-"
+    },
+    Language.SV: {
+        "language_token": "sv",
+        "model_id": "sv",
+        "required_token": False,
+        "model_prefix": "opus-mt-"
+    },
+    Language.TH: {
+        "language_token": "tha",
+        "model_id": "mul",
+        "required_token": True,
+        "model_prefix": "opus-mt-"
+    },
+    Language.TR: {
+        "language_token": "trk",
+        "model_id": "trk",
+        "required_token": False,
+        "model_prefix": "opus-mt-"
+    },
+    Language.ZH_CH: {
+        "language_token": "cmn_Hans",
+        "model_id": "zh",
+        "required_token": True,
+        "model_prefix": "opus-mt-"
+    },
+    Language.ZH_HK: {
+        "language_token": "cmn_Hant",
+        "model_id": "zh",
+        "required_token": True,
+        "model_prefix": "opus-mt-"
+    }
+}  
 
 class MarianTranslatorModel(TranslatorModel):
 
@@ -49,34 +171,35 @@ class MarianTranslatorModel(TranslatorModel):
             target_langs = [lang for lang in Language if lang != source_lang]
 
         MarianTranslatorModel.log_info(f"Start the loading Models for languages: {target_langs} ...")    
-        source_lang_code = MarianTranslatorModel.convert_language_to_code(language=source_lang)
+        
         models = {}
         start_time = time.time() 
         for target_lang in target_langs:
-            target_lang_code = MarianTranslatorModel.convert_language_to_code(language=target_lang)  
-            model_identifier = f"Helsinki-NLP/opus-mt-{source_lang_code}-{target_lang_code}"
-            MarianTranslatorModel.log_info(f"Loading  the '{model_identifier}' model ...")
-            model = MarianMTModel.from_pretrained(model_identifier, cache_dir=cache_dir)
-            tokenizer = MarianTokenizer.from_pretrained(model_identifier, cache_dir=cache_dir)
-            models[target_lang] = (model, tokenizer)
+            model_identifier =  MarianTranslatorModel.get_model_name(from_language=source_lang, to_language=target_lang)
+            if model_identifier: 
+                MarianTranslatorModel.log_info(f"Loading  the '{model_identifier}' model ...")
+                model = MarianMTModel.from_pretrained(model_identifier, cache_dir=cache_dir)            
+                tokenizer = MarianTokenizer.from_pretrained(model_identifier, cache_dir=cache_dir)
+                models[target_lang] = (model, tokenizer)
 
         end_time = time.time()
         elapsed_time = end_time - start_time
         MarianTranslatorModel.log_info(f"{len(models)} Language models were loaded in {elapsed_time:.2f} seconds.")
         return models  
     
-    @staticmethod 
-    def convert_language_to_code(language: Language) -> str:
-        # Try to get the Helsinki-NLP code from the map
-        languag_code = language_to_helsinki_map.get(language)
+    @staticmethod
+    def get_model_name(from_language: Language, to_language: Language) -> str:
+        # Retrieve configuration for both from_language and to_language
+        from_lang_config = opus_mt_language_models[from_language]
+        to_lang_config = opus_mt_language_models[to_language]
+
+        if from_lang_config['language_token'] == to_lang_config['language_token']: 
+            return None
         
-        # If the code isn't found in the map, default to a modified value of the enum (assuming some manipulation might be necessary)
-        if languag_code is None:
-            # Default to the lower-case version of the enum value after replacing '_' with '-'
-            # This is just an example and might need adjustment based on actual Helsinki-NLP codes
-            languag_code = language.value.lower().replace('_', '-')
-        
-        return languag_code
+        # Construct the model name
+        model_name = f"Helsinki-NLP/{to_lang_config['model_prefix']}{from_lang_config['model_id']}-{to_lang_config['model_id']}"
+    
+        return model_name
     
     @staticmethod 
     def log_info(message: str, logging=None):
@@ -113,18 +236,27 @@ class MarianTranslatorModel(TranslatorModel):
         try:
             print(f"Languages: {translation_request.get_to_languages()}")
             print(f"Translations: {translation_request.get_translations()}")
+            from_lang_config = opus_mt_language_models[translation_request.get_from_language()]
             for lang in translation_request.get_to_languages():
-                model, tokenizer = self.lang_models[lang]
-                if model is None or tokenizer is None:
-                    self.log_error(f"Cannot find a model for the translating from '{translation_request.get_from_language()}' to '{lang}")
-                else:    
+                to_lang_config = opus_mt_language_models[lang]
+                if from_lang_config['language_token'] == to_lang_config['language_token']:
+                    print(f"No need to translate from '{translation_request.get_from_language()}' to '{lang}'")
                     for translation in translation_request.get_translations():
-                        text_to_translate = translation.get_text_to_translate()
-                        print(f"Translationing '{text_to_translate}' to '{lang}' ... ")
-                        translated = model.generate(**tokenizer(text_to_translate, return_tensors="pt", padding=True, max_length=512, truncation=True))
-                        translated_text = tokenizer.decode(translated[0], skip_special_tokens=True)
-                        self.log_info(f"Translated '{text_to_translate}' from '{translation_request.get_from_language()}' to '{lang}': '{translated_text}'")
-                        translation.add_translated_text(to_text=translated_text, to_language=lang)
+                        translation.add_translated_text(to_text=translation.get_text_to_translate(), to_language=lang)
+                else:    
+                    model, tokenizer = self.lang_models[lang]
+                    if model is None or tokenizer is None:
+                        self.log_error(f"Cannot find a model for the translating from '{translation_request.get_from_language()}' to '{lang}")
+                    else:    
+                        for translation in translation_request.get_translations():
+                            text_to_translate = translation.get_text_to_translate()
+                            if to_lang_config['required_token']:
+                                text_to_translate =f">>{to_lang_config['language_token']}<<{text_to_translate}"
+                            print(f"Translationing '{text_to_translate}' to '{lang}' ... ")
+                            translated = model.generate(**tokenizer(text_to_translate, return_tensors="pt", padding=True, max_length=512, truncation=True))
+                            translated_text = tokenizer.decode(translated[0], skip_special_tokens=True)
+                            self.log_info(f"Translated '{text_to_translate}' from '{translation_request.get_from_language()}' to '{lang}': '{translated_text}'")
+                            translation.add_translated_text(to_text=translated_text, to_language=lang)
         except Exception as error:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             print("Exception type:", exc_type)
