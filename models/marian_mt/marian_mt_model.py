@@ -77,6 +77,12 @@ opus_mt_language_models = {
         "required_token": False,
         "model_prefix": "opus-mt-"
     },
+    Language.HI: {
+        "language_token": "hi",
+        "model_id": "hi",
+        "required_token": False,
+        "model_prefix": "opus-mt-"
+    },
     Language.JA: {
         "language_token": "jap",
         "model_id": "jap",
@@ -87,7 +93,7 @@ opus_mt_language_models = {
         "language_token": "ko",
         "model_id": "ko",
         "required_token": False,
-        "model_prefix": "opus-mt-tc-big-"
+        "model_prefix": "opus-mt-tc-big-" #No very good translation to Korean; but right now, there is no other OPUS model is available
     },
     Language.NL: {
         "language_token": "nld",
@@ -208,20 +214,50 @@ class MarianTranslatorModel(TranslatorModel):
         else:
             logging.info(message) 
 
-    def encode_placeholders(self, text: str, glossary: Dict[str, str]) -> str:
+    def preserve_glossary_words(self, text: str, glossary: List[Tuple[str,str]], preserved_words: Dict[str, str]) -> str:
+        def replace_and_record(match):
+            term = match.group(0)
+            dict_size = len(preserved_words)
+            token = self.create_placeholder(index=dict_size)
+            # Only add to the dictionary if the term was actually found and replaced
+            preserved_words[token] = term
+            return token
+        
+        # Regex to find whole words only, avoiding partial matches
+        for key, escaped_term in glossary:
+            # Custom boundary handling: Adjust depending on if term ends with non-word character
+            if escaped_term[-1].isalnum():  # Ends with an alphanumeric character
+                pattern = fr'\b{escaped_term}\b'
+            else:  # Ends with non-alphanumeric, such as punctuation
+                pattern = fr'\b{escaped_term}(?!\w)'
+            # Directly use `escaped_term` which is already prepared for regex use
+            text = re.sub(pattern, replace_and_record, text)
+
+        return text         
+   
+    def preserve_glossary_words(self, text: str, glossary: List[Tuple[str,str]], preserved_words: Dict[str, str]) -> str:
+        # Regex to find whole words only, avoiding partial matches
+        for key, escaped_term in glossary:
+            # Use word boundaries to match whole words
+            token = MarianTranslatorModel.create_placeholder(text=key)
+            text = re.sub(fr'\b{key}\b', token, text)
+            preserved_words[token] = key
+        return text    
+
+    @staticmethod 
+    def create_placeholder(text: str) -> str:
+        # Remove non-alphabetic characters using regular expression
+        cleaned_text = re.sub(r'[^a-zA-Z]', '', text)
+        # Convert the cleaned text to uppercase
+        return f"_{cleaned_text.upper()}"      
+
+    def encode_placeholders(self, text: str, preserved_words: Dict[str, str]) -> str:
         placeholders = re.findall(r'\{\d+\}', text)
         for i, placeholder in enumerate(placeholders):
             token = f"_{i}"
-            glossary[token] = placeholder
+            preserved_words[token] = placeholder
             text = text.replace(placeholder, token)
-
-        return text    
-    
-    def decode_placeholders(self, text: str, glossary: Dict[str, str]) -> str:
-        for token, placeholder in glossary.items():
-            text = text.replace(token, placeholder)
-
-        return text    
+        return text
 
     def translate(self, translation_request: TranslationRequest):
         """
@@ -253,8 +289,9 @@ class MarianTranslatorModel(TranslatorModel):
                             if to_lang_config['required_token']:
                                 text_to_translate =f">>{to_lang_config['language_token']}<<{text_to_translate}"
                             print(f"Translationing '{text_to_translate}' to '{lang}' ... ")
-                            translated = model.generate(**tokenizer(text_to_translate, return_tensors="pt", padding=True, max_length=512, truncation=True))
+                            translated = model.generate(**tokenizer(text_to_translate, return_tensors="pt", padding=True, max_length=TranslatorModel.TRANSLATION_MAX_LENGTH, truncation=True))
                             translated_text = tokenizer.decode(translated[0], skip_special_tokens=True)
+                            translated_text = self.restore_preserved_words(text=translated_text, preserved_words=translation.get_preserved_words())
                             self.log_info(f"Translated '{text_to_translate}' from '{translation_request.get_from_language()}' to '{lang}': '{translated_text}'")
                             translation.add_translated_text(to_text=translated_text, to_language=lang)
         except Exception as error:

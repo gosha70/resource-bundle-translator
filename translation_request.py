@@ -2,7 +2,7 @@
 # This software may be used and distributed according to the terms of the GPL-3.0 license.
 from typing import List, Optional
 from languages import Language
-from translation import Translation
+from translation import Translation, MISSING_TRANSLATION
 
 class TranslationRequest:
     def __init__(self, from_language: Language, translations: List[Translation], to_languages: Optional[List[Language]]):
@@ -18,7 +18,7 @@ class TranslationRequest:
                                          to all supported languages.
         """
         self.from_language = from_language
-        self.translations = translations
+        self.translation_map = {item.get_message_id(): item for item in translations}  
         if to_languages is None:
             # If no target languages are specified, use all except the source language
             to_languages = [lang for lang in Language if lang != from_language]
@@ -38,7 +38,13 @@ class TranslationRequest:
         return self.to_languages 
 
     def get_translations(self) -> List[Translation]:
-        return self.translations
+        return self.translation_map.values()
+    
+    def get_translation_by_message_id(self, message_id: str, to_language: Language) -> str:
+        translation = self.translation_map.get(message_id)
+        if translation is None:
+            return MISSING_TRANSLATION        
+        return translation.get_translated_text(language=to_language)
 
     def __str__(self):
-        return str(self.translations)
+        return str(self.translation_map)

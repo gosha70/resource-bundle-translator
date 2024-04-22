@@ -25,14 +25,8 @@
         "zh_HK"
     ],
     "glossary": [
-        {
-            "key": "EGOGE",
-            "value": "_EGOGE"
-        },
-        {
-            "key": "Ltd.",
-            "value": "_LTD"
-        }
+        "EGOGE",
+        "Ltd."
     ]
 }    
 

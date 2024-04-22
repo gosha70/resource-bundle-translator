@@ -4,28 +4,29 @@ from enum import Enum
 from typing import List
 
 class Language(str, Enum):    
-    AR = "ar"
-    DE = "de"
-    EL = "el"
-    EN_GB ="en_GB"
-    EN_US = "en_US"
-    ES = "es"
-    FR_CA = "fr_CA"
-    FR_CH = "fr_CH"
-    FR_FR = "fr_FR"
-    IT = "it"
-    HE = "iw"
-    JA = "ja"
-    KO = "ko"
-    NL = "nl"
-    PL = "pl"
-    PT = "pt"
-    RU = "ru"
-    SV = "sv"
-    TH = "th"
-    TR = "tr"
-    ZH_CH = "zh_CN"
-    ZH_HK = "zh_HK"
+    AR = "ar"       # Modern Standard Arabic 
+    DE = "de"       # German
+    EL = "el"       # Greek
+    EN_GB ="en_GB"  # English, assuming no distinction in model between GB and US
+    EN_US = "en_US" # English
+    ES = "es"       # Spanish
+    FR_CA = "fr_CA" # French, assuming no distinction for Canadian French
+    FR_CH = "fr_CH" # French
+    FR_FR = "fr_FR" # French
+    IT = "it"       # Italian
+    HE = "iw"       # Hebrew
+    HI = "hi"       # Hindi
+    JA = "ja"       # Japanese
+    KO = "ko"       # Korean
+    NL = "nl"       # Dutch
+    PL = "pl"       # Polish
+    PT = "pt"       # Portuguese
+    RU = "ru"       # Russian
+    SV = "sv"       # Swedish
+    TH = "th"       # Thai
+    TR = "tr"       # Turkish
+    ZH_CH = "zh_CN" # Chinese Mandarin
+    ZH_HK = "zh_HK" # Chinese Mandarin, assuming no distinction for Hong Kong
         
     @staticmethod
     def get_language_by_code(value: str):

@@ -6,17 +6,21 @@ from languages import Language
 MISSING_TRANSLATION = "### NONE ###"
 
 class Translation:
-    def __init__(self, original_text: str, adjusted_text: str, glossary: Dict[str, str]):
+    def __init__(self, message_id: str, original_text: str, adjusted_text: str, preserved_words: Dict[str, str]):
+        self.message_id = message_id
         self.original_text = original_text
         self.adjusted_text = adjusted_text
-        self.glossary = glossary
+        self.preserved_words = preserved_words
         self.translation_per_lang = {}
+
+    def get_message_id(self) -> str:
+        return self.message_id    
 
     def get_text_to_translate(self) -> str:
         return self.adjusted_text
 
-    def get_glossary(self) -> Dict[str, str]:
-        return self.glossary
+    def get_preserved_words(self) -> Dict[str, str]:
+        return self.preserved_words
     
     def get_translated_text(self, language: Language) -> str:
          return self.translation_per_lang.get(language, MISSING_TRANSLATION)

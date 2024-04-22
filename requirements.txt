@@ -2,3 +2,4 @@ transformers
 flask 
 torch
 sacremoses
+sentencepiece
