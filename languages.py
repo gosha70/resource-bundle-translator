@@ -27,6 +27,7 @@ class Language(str, Enum):
     TR = "tr"       # Turkish
     ZH_CH = "zh_CN" # Chinese Mandarin
     ZH_HK = "zh_HK" # Chinese Mandarin, assuming no distinction for Hong Kong
+
         
     @staticmethod
     def get_language_by_code(value: str):

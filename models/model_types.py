@@ -7,10 +7,12 @@ from languages import Language
 from models.language_model import TranslatorModel
 from models.marian_mt.marian_mt_model import MarianTranslatorModel
 from models.facebook.nllb_model import NLLBTranslatorModel
+from models.open_ai.open_ai_model import OpenAITranslatorModel
 
 class ModelType(str, Enum):  
     OPUS = "opus"       # OPUS via Marian MT
     NLLB = "nllb"       # (default) NLLB 200 via AutoModelForSeq2SeqLM  
+    OPEN_AI = "openai"  # The OpenAI model demonstrates the use of external model as a managed service
 
     @staticmethod
     def get_model_type(model_name: str):
@@ -24,5 +26,7 @@ class ModelType(str, Enum):
         model_type = ModelType.get_model_type(model_name=model_name) 
         if model_type == ModelType.OPUS:
             return MarianTranslatorModel(source_lang=source_lang, target_langs=target_langs, cache_dir=cache_dir, logging=logging)   
+        elif model_type == ModelType.OPEN_AI:
+            return OpenAITranslatorModel(source_lang=source_lang, target_langs=target_langs, logging=logging)
         else:
             return NLLBTranslatorModel(source_lang=source_lang, target_langs=target_langs, cache_dir=cache_dir, logging=logging)

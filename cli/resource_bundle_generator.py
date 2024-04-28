@@ -86,10 +86,9 @@ def parse_arguments():
     parser.add_argument(
         '--exclude_marker', 
         type=str, 
-        help='(Optional) The maeker for the message key for not translating that message.', 
+        help='(Optional) The marker for the message key for not translating that message.', 
         default=None
-    )
-    
+    )    
     return parser.parse_args()
 
 def main():

@@ -3,7 +3,7 @@
 import re
 import json
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from models.language_model import TranslatorModel
 from languages import Language
@@ -27,7 +27,7 @@ class TranslationService:
         glossary (set): A set of glossary terms.
         
         Returns:
-        list of tuples: Each tuple contains the original term and the escaped term.
+        List[Tuple]: Each tuple contains the original term and the escaped term.
         """
         # Sort by length (longest first) and escape terms for regex
         sorted_escaped_glossary = sorted(
@@ -43,7 +43,12 @@ class TranslationService:
             translation = self.prepare_text_for_translation(message_id=msg_key, orig_text=msg_value)
             translations.append(translation)
 
-        translation_request = TranslationRequest(from_language=from_language, translations=translations, to_languages=to_languages)
+        translation_request = TranslationRequest(
+            glossary=self.glossary,
+            from_language=from_language, 
+            translations=translations, 
+            to_languages=to_languages
+        )
         
         start_time = time.time() 
         self.model.translate(translation_request=translation_request)

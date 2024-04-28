@@ -1,10 +1,8 @@
 # Copyright (c) EGOGE - All Rights Reserved.
 # This software may be used and distributed according to the terms of the GPL-3.0 license.
-import re
-import os
 import sys
 import time
-import uuid
+import re
 from typing import List, Dict, Optional, Tuple
 from transformers import AutoConfig, AutoModelForSeq2SeqLM, AutoTokenizer, pipeline
 from models.language_model import TranslatorModel, TRANSLATION_MAX_LENGTH
@@ -47,20 +45,15 @@ class NLLBTranslatorModel(TranslatorModel):
 
     def __init__(self, source_lang: Language, target_langs: Optional[List[Language]], cache_dir=None, logging=None):
         super().__init__(cache_dir=cache_dir, logging=logging)
-        cache_dir="~/tmp/ai_cache/"
-        if not os.path.exists(cache_dir):
-            os.makedirs(cache_dir, exist_ok=True)
-        self.log_info(f"Start the loading {NLLB_MODEL_NAME} Language model with the cache dir: '{cache_dir}'")  
+        self.log_info(f"Start the loading {NLLB_MODEL_NAME} Language model  ...")  
         self.source_lang = source_lang
         self.target_langs = target_langs
         start_time = time.time() 
 
-        # Load the configuration from the pretrained model
-        config = AutoConfig.from_pretrained(NLLB_MODEL_NAME) #, cache_dir=cache_dir)
-
         # Initialize the tokenizer and model with the loaded configuration
-        self.tokenizer = AutoTokenizer.from_pretrained(NLLB_MODEL_NAME, config=config) #, cache_dir=cache_dir)
-        self.model = AutoModelForSeq2SeqLM.from_pretrained(NLLB_MODEL_NAME, config=config) #, cache_dir=cache_dir)
+        config = AutoConfig.from_pretrained(NLLB_MODEL_NAME) #, cache_dir=cache_dir)
+        self.tokenizer = AutoTokenizer.from_pretrained(NLLB_MODEL_NAME, config=config)
+        self.model = AutoModelForSeq2SeqLM.from_pretrained(NLLB_MODEL_NAME, config=config)
 
         end_time = time.time()
         elapsed_time = end_time - start_time
@@ -114,6 +107,8 @@ class NLLBTranslatorModel(TranslatorModel):
         translations = translation_request.get_translations()
         texts_to_translate = [text.get_text_to_translate() for text in translations]
 
+        print(f"Text to translate: {texts_to_translate}")
+
         try:
             for target_lang in translation_request.get_to_languages():
                 to_lang = LANGUAGE_CODE_MAP[target_lang]
@@ -150,4 +145,3 @@ class NLLBTranslatorModel(TranslatorModel):
             return translated_text[:-1]  
 
         return translated_text
-
