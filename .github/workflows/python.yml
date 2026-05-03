@@ -1,0 +1,77 @@
+name: Python CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+    inputs:
+      python-version:
+        description: "Python version to test (leave blank to run full matrix)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  detect:
+    # Lightweight gate: skip the test job entirely until the consumer
+    # project ships a Python build manifest. hashFiles() is not allowed
+    # in jobs.<id>.if, so detection happens in a step here and downstream
+    # jobs gate on needs.detect.outputs.ready.
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: check
+        run: |
+          if [[ -f pyproject.toml || -f setup.py || -f setup.cfg ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No Python manifest (pyproject.toml/setup.py/setup.cfg) found — skipping Python CI."
+          fi
+
+  test:
+    needs: detect
+    if: needs.detect.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # workflow_dispatch with a non-empty python-version input runs that
+        # version only; otherwise (push, PR, or blank dispatch) runs the full matrix.
+        python-version: ${{ github.event.inputs.python-version && fromJSON(format('["{0}"]', github.event.inputs.python-version)) || fromJSON('["3.10","3.11","3.12"]') }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Cache HuggingFace models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-${{ matrix.python-version }}-${{ hashFiles('**/pyproject.toml', '**/requirements*.txt') }}
+          restore-keys: |
+            hf-${{ matrix.python-version }}-
+
+      - name: Install package with dev extras
+        run: pip install -e ".[dev]"
+
+      - name: Lint with ruff
+        run: ruff check .
+
+      - name: Type check with mypy
+        run: mypy .
+
+      - name: Run tests with coverage
+        run: pytest --cov
