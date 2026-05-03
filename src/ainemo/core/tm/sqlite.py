@@ -153,13 +153,22 @@ class SqliteTranslationMemory:
         segment: Segment,
         target_lang: str,
         fuzzy_threshold: float = DEFAULT_FUZZY_THRESHOLD,
+        *,
+        provider: str | None = None,
+        model: str | None = None,
     ) -> TmHit | None:
-        exact = self._lookup_exact(segment, target_lang)
+        exact = self._lookup_exact(segment, target_lang, provider=provider, model=model)
         if exact is not None:
             return exact
         if self._embedder is None:
             return None
-        return self._lookup_fuzzy(segment, target_lang, fuzzy_threshold)
+        return self._lookup_fuzzy(
+            segment,
+            target_lang,
+            fuzzy_threshold,
+            provider=provider,
+            model=model,
+        )
 
     def store(self, translated: TranslatedSegment) -> None:
         seg = translated.segment
@@ -272,13 +281,28 @@ class SqliteTranslationMemory:
         else:
             self._conn.execute("COMMIT")
 
-    def _lookup_exact(self, segment: Segment, target_lang: str) -> TmHit | None:
+    def _lookup_exact(
+        self,
+        segment: Segment,
+        target_lang: str,
+        *,
+        provider: str | None = None,
+        model: str | None = None,
+    ) -> TmHit | None:
+        clauses = ["fingerprint = ?", "target_lang = ?"]
+        params: list[object] = [segment.fingerprint, target_lang]
+        if provider is not None:
+            clauses.append("provider = ?")
+            params.append(provider)
+        if model is not None:
+            clauses.append("model = ?")
+            params.append(model)
         cursor = self._conn.execute(
             "SELECT target_text, provider, model, confidence, source "
             "FROM translations "
-            "WHERE fingerprint = ? AND target_lang = ? "
+            f"WHERE {' AND '.join(clauses)} "
             "ORDER BY created_at DESC LIMIT 1",
-            (segment.fingerprint, target_lang),
+            params,
         )
         row = cursor.fetchone()
         if row is None:
@@ -304,10 +328,21 @@ class SqliteTranslationMemory:
         segment: Segment,
         target_lang: str,
         threshold: float,
+        *,
+        provider: str | None = None,
+        model: str | None = None,
     ) -> TmHit | None:
         if self._embedder is None:
             return None
         query_embedding = self._embedder(segment.source_text)
+        join_clauses = ["t.target_lang = ?"]
+        join_params: list[object] = [target_lang]
+        if provider is not None:
+            join_clauses.append("t.provider = ?")
+            join_params.append(provider)
+        if model is not None:
+            join_clauses.append("t.model = ?")
+            join_params.append(model)
         cursor = self._conn.execute(
             "SELECT s.fingerprint, s.source_text, s.source_lang, "
             "       s.placeholders_json, s.embedding, "
@@ -315,10 +350,10 @@ class SqliteTranslationMemory:
             "FROM segments s "
             "JOIN translations t "
             "  ON s.fingerprint = t.fingerprint "
-            " AND t.target_lang = ? "
+            f" AND {' AND '.join(join_clauses)} "
             "WHERE s.source_lang = ? "
             "  AND s.embedding IS NOT NULL",
-            (target_lang, segment.source_lang),
+            (*join_params, segment.source_lang),
         )
         best_similarity: float = -1.0
         best_row: _FuzzyRow | None = None

@@ -175,6 +175,104 @@ def test_store_overwrites_for_same_provider(tmp_path: Path) -> None:
     tm.close()
 
 
+def test_lookup_filters_by_provider_and_model(tmp_path: Path) -> None:
+    """Cycle-2 contract pin: ``lookup(provider=, model=)`` narrows
+    to the specific (provider, model) row even when newer rows for
+    the same (segment, target_lang) exist with other providers or
+    models. Without these filters, the router cannot route
+    deterministically — a ``gpt-4o`` lookup would surface the most
+    recent ``gpt-4-turbo`` row simply because it was written later."""
+    tm = SqliteTranslationMemory(tmp_path / "tm.sqlite")
+    seg = _seg()
+    tm.store(
+        TranslatedSegment(
+            segment=seg,
+            target_lang=_LANG_DE,
+            target_text="From GPT-4o",
+            provider="openai",
+            model="gpt-4o-2024-11-20",
+            confidence=0.9,
+            source=TRANSLATION_SOURCE_PROVIDER,
+        )
+    )
+    tm.store(
+        TranslatedSegment(
+            segment=seg,
+            target_lang=_LANG_DE,
+            target_text="From GPT-4 Turbo",
+            provider="openai",
+            model="gpt-4-turbo",
+            confidence=0.9,
+            source=TRANSLATION_SOURCE_PROVIDER,
+        )
+    )
+    tm.store(
+        TranslatedSegment(
+            segment=seg,
+            target_lang=_LANG_DE,
+            target_text="From Claude",
+            provider="anthropic",
+            model="claude-sonnet-4-5-20250929",
+            confidence=0.9,
+            source=TRANSLATION_SOURCE_PROVIDER,
+        )
+    )
+
+    hit_4o = tm.lookup(seg, _LANG_DE, provider="openai", model="gpt-4o-2024-11-20")
+    assert hit_4o is not None
+    assert hit_4o.translated.target_text == "From GPT-4o"
+
+    hit_turbo = tm.lookup(seg, _LANG_DE, provider="openai", model="gpt-4-turbo")
+    assert hit_turbo is not None
+    assert hit_turbo.translated.target_text == "From GPT-4 Turbo"
+
+    hit_claude = tm.lookup(seg, _LANG_DE, provider="anthropic")
+    assert hit_claude is not None
+    assert hit_claude.translated.target_text == "From Claude"
+
+    # Unconstrained lookup keeps cycle-1 "any cached translation"
+    # semantics: most recent matching row wins.
+    hit_any = tm.lookup(seg, _LANG_DE)
+    assert hit_any is not None
+    assert hit_any.translated.target_text == "From Claude"
+    tm.close()
+
+
+def test_lookup_returns_none_when_filtered_pair_missing(tmp_path: Path) -> None:
+    """A specific (provider, model) filter that has no rows must
+    return None — never silently broaden to another row."""
+    tm = SqliteTranslationMemory(tmp_path / "tm.sqlite")
+    seg = _seg()
+    tm.store(
+        TranslatedSegment(
+            segment=seg,
+            target_lang=_LANG_DE,
+            target_text="x",
+            provider="openai",
+            model="gpt-4o-2024-11-20",
+            confidence=0.9,
+            source=TRANSLATION_SOURCE_PROVIDER,
+        )
+    )
+
+    assert tm.lookup(seg, _LANG_DE, provider="anthropic") is None
+    assert tm.lookup(seg, _LANG_DE, provider="openai", model="gpt-3.5-turbo") is None
+    tm.close()
+
+
+def test_translated_segment_is_keyword_only() -> None:
+    """Cycle-2 contract pin: TranslatedSegment refuses positional
+    construction. Adding a new field in cycle 3+ (persona,
+    termbase_hits, etc.) cannot silently corrupt callers that
+    construct it positionally because positional construction itself
+    is rejected at runtime."""
+    import pytest
+
+    seg = _seg()
+    with pytest.raises(TypeError):
+        TranslatedSegment(seg, _LANG_DE, "x", "openai")  # type: ignore[misc]
+
+
 def test_different_models_under_same_provider_coexist(tmp_path: Path) -> None:
     """Cycle-2 contract pin: two models behind the same provider id
     cache independently. Without the model in the TM PK,
