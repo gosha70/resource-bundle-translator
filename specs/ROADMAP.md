@@ -33,41 +33,28 @@ The defensible product is the **intersection of all four**, plus a CC0/CC-BY-onl
 
 ## Cycle plan
 
-Each cycle below is a single Shape-Up bet. Cycles 0–1 are committed; 2 is shaped-pending; 3 onward is provisional and will be re-shaped before betting.
+Each cycle below is a single Shape-Up bet. Cycles 0 is shipped; 1 and 2 are shaped (cycle 1 is the natural next bet); 3 onward is provisional and will be re-shaped before betting.
 
 | # | Title | Appetite | Status | Goal in one line |
 |---|---|---|---|---|
-| 0 | Rebrand & Stabilize | 2w | committed | Become AI-NEMO, fix audit bugs, set up CI. |
+| 0 | Rebrand & Stabilize | 2w | **shipped** (PR #2 merged 2026-05-03; retro: [`retros/cycle-0.md`](retros/cycle-0.md)) | Became AI-NEMO, fixed audit bugs, set up green CI matrix. |
 | 1 | Foundation: Adapters + TM + Validators | 6w | shaped | Multi-format bundles, SQLite TM with fuzzy match, ICU-aware validators. |
-| 2 | Provider Abstraction + Gradle Plugin | 6w | stub | Pluggable LLM providers (Anthropic, Ollama added) + first Gradle plugin for JVM `.properties`. |
+| 2 | Provider Abstraction + Gradle Plugin | 6w | **shaped** | Pluggable LLM providers (Anthropic + Ollama added) + first Gradle plugin for JVM `.properties`. |
 | 3 | Concept-Oriented Termbase via Kuzu | 6w | stub | Migrate flat termbase to Kuzu, TBX 3.0 I/O, persona system. |
 | 4 | First Domain Pack: legal-en | 6w | stub | Pack format spec, IATE+EuroVoc-derived legal-en pack, Wikidata anchors. |
 | 5 | Reviewer Web UI + QA Layer | 6w | stub | Auto-promotion review queue, confidence scoring, back-translation QA. |
 | 6 | Multi-Platform Expansion | 6w | stub | Maven plugin, npm plugin, `.xcstrings` and Fluent adapters. |
 | 7+ | Additional domain packs | recurring | future | medical-en (MeSH), aerospace-en, finance-en (IATE finance subset). |
 
-## Cycle 0 — Rebrand & Stabilize (2 weeks)
+## Cycle 0 — Rebrand & Stabilize (shipped)
 
-**Pitch**: [pitches/0000-rebrand-stabilize.md](pitches/0000-rebrand-stabilize.md) *(to be drafted before this cycle starts — it's small enough that a one-pager will do).*
+**Pitch**: [pitches/0000-rebrand-stabilize/pitch.md](pitches/0000-rebrand-stabilize/pitch.md) — status `shipped`.
+**Retro**: [retros/cycle-0.md](retros/cycle-0.md).
+**Shipped**: 2026-05-03 via [PR #2](https://github.com/gosha70/resource-bundle-translator/pull/2), merge commit `a563dd5`.
 
-**Outcome**: A repo named `ai-nemo` with green CI, fixed audit bugs, reorganized package layout, and a README that reflects the new positioning. No new product capability.
+All 7 scopes landed inside the 2-week appetite (actual session execution: hours). Two iterative review passes caught 5 P1 bugs before merge. Five durable feedback rules were added to project memory during the cycle (estimate calibration, doc pre-resolution, pitch-in-build-PR, no magic strings, SOLID/DRY).
 
-**In scope**:
-- Rename repo `resource-bundle-translator` → `ai-nemo` on GitHub. Set up redirects.
-- Fix bugs from the audit: `translationss` typo ([translation_request.py:33](../translation_request.py)), duplicate `preserve_glossary_words()` ([models/marian_mt/marian_mt_model.py:217](../models/marian_mt/marian_mt_model.py)), `openaipw` → `openai` in `requirements.txt`, README port mismatch (5005 vs 5001).
-- Replace `print()` with `logging` throughout.
-- Reorganize: `core/`, `adapters/`, `providers/`, `cli/`, `app/`, `test/`. Old top-level modules become deprecation shims for one release, then delete.
-- Pin Python ≥3.10 in `pyproject.toml`. Migrate from bare `requirements.txt`.
-- GitHub Actions: lint (ruff), type-check (mypy), test (pytest). Block PRs on red CI.
-- Update README with AI-NEMO positioning, north-star, and link to roadmap.
-
-**No-gos**:
-- No new translation features.
-- No KG, no Kuzu, no domain packs.
-- No new providers.
-- No format adapters beyond `.properties`.
-
-**Why now**: The audit found real bugs that block the OpenAI provider and crash the request envelope. These have to be fixed before any new pitch lands on top, or every later cycle inherits them.
+**Outstanding action carried forward**: GitHub-side repo rename `resource-bundle-translator` → `ai-nemo` (deferred per pitch open question 4 — pair with the first AI-NEMO release tag).
 
 ## Cycle 1 — Foundation: Adapters + TM + Validators (6 weeks)
 
@@ -79,11 +66,13 @@ Each cycle below is a single Shape-Up bet. Cycles 0–1 are committed; 2 is shap
 
 ## Cycle 2 — Provider Abstraction + Gradle Plugin (6 weeks)
 
-**Provisional outcome**: Clean `Provider` interface (NLLB, OpenAI, Anthropic Claude, Ollama). Cost & latency tracking per call. Caching layer. First Gradle plugin shipping to plugin portal as `io.aineмo.translate` (or similar — namespace TBD), targeting JVM `messages_*.properties` and Spring resource bundles.
+**Pitch**: [pitches/0002-providers-gradle/pitch.md](pitches/0002-providers-gradle/pitch.md) — fully shaped, awaiting `/bet`.
 
-**Why this order**: the Gradle plugin needs the provider abstraction to be useful (an Anthropic-only or Ollama-only plugin is a non-starter for enterprise users). Cycle 1's daemon-mode IPC enables the plugin to delegate without re-implementing core logic.
+**Outcome**: Clean `Provider` Protocol (NLLB, OPUS, OpenAI, **Anthropic Claude**, **Ollama**). Cost & latency tracking per call recorded to `~/.ainemo/usage.jsonl`. Daemon-mode IPC (`nemo daemon`) for build-tool integration. First Gradle plugin published as `com.egoge.ai.nemo.translate`, targeting JVM `messages_*.properties` and Spring resource bundles.
 
-**Likely no-gos**: Maven plugin, npm plugin, Android `strings.xml` (PhilKes already owns that), web UI.
+**Why this order**: the Gradle plugin needs the provider abstraction to be useful (an Anthropic-only or Ollama-only plugin is a non-starter for enterprise users). The router-level cache reuses cycle-1's TM table — no double-caching.
+
+**Likely no-gos**: Maven plugin, npm plugin (cycle 6), Android `strings.xml` (PhilKes already owns that), web UI (cycle 5), `.xcstrings` / Fluent / `.resx`, KG / termbase work.
 
 ## Cycle 3 — Concept-Oriented Termbase via Kuzu (6 weeks)
 
