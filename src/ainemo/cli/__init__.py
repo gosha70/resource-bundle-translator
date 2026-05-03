@@ -1,39 +1,74 @@
 """AI-NEMO command-line interface.
 
-The `nemo` console-script entry point declared in `pyproject.toml`
-resolves to :func:`main` below. Cycle 0 ships a stub; cycle 1 wires
-real subcommands (`translate`, `tm stats`, `validate`).
+The ``nemo`` console-script entry point declared in ``pyproject.toml``
+resolves to :func:`main`. The dispatcher routes to the cycle-1
+subcommands:
+
+- ``nemo translate`` — translate a single bundle file
+- ``nemo tm stats`` — report TM statistics
+- ``nemo validate`` — re-run validators on an existing translation
+
+Cycle 2 expands this surface with provider management
+(``nemo provider list/stats``) and daemon mode (``nemo daemon``).
 """
 
 from __future__ import annotations
 
+import argparse
 import sys
+from typing import Sequence
 
-# --- Module constants (no magic strings; AGENTS.md § Prohibited Patterns) ---
-
-# Path within the repo to the cycle-1 pitch where the real CLI shape is
-# specified. Surfacing this in the stub message gives users a concrete
-# place to follow up. Extracted as a constant so a future pitch rename
-# breaks one place, not several.
-_CYCLE_1_PITCH_PATH: str = "specs/pitches/0001-foundation/pitch.md"
-
-# Human-facing message printed by the stub. Kept as a constant so a test
-# can assert on its presence without re-typing the literal.
-_STUB_MESSAGE: str = (
-    "nemo: AI-NEMO CLI is in cycle 0 (rebrand & stabilize).\n"
-    f"Real subcommands (translate, tm stats, validate) ship in cycle 1 — "
-    f"see {_CYCLE_1_PITCH_PATH}.\n"
+from ainemo.cli.commands import (
+    CMD_NAME_TM,
+    CMD_NAME_TRANSLATE,
+    CMD_NAME_VALIDATE,
+    register_tm,
+    register_translate,
+    register_validate,
 )
 
 
-def main() -> int:
-    """Stub entry point for the `nemo` CLI.
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="nemo",
+        description=(
+            "AI-NEMO — knowledge-graph-grounded localization CLI. "
+            "Translate resource bundles, query the translation memory, "
+            "and re-run validators on existing output."
+        ),
+    )
+    subparsers = parser.add_subparsers(dest="subcommand")
+    register_translate(subparsers)
+    register_tm(subparsers)
+    register_validate(subparsers)
+    return parser
 
-    Cycle 1 replaces this with an argparse/click dispatcher that routes
-    `nemo translate`, `nemo tm`, `nemo validate`, etc. to their handlers.
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Dispatch to the cycle-1 subcommands.
+
+    Returns the subcommand's exit code (0 on success, non-zero on
+    failure or validation errors).
     """
-    sys.stderr.write(_STUB_MESSAGE)
-    return 0
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+    if args.subcommand is None:
+        parser.print_help(sys.stderr)
+        return 2
+    if args.subcommand == CMD_NAME_TRANSLATE:
+        from ainemo.cli.commands import run_translate
+
+        return run_translate(args)
+    if args.subcommand == CMD_NAME_TM:
+        from ainemo.cli.commands import run_tm
+
+        return run_tm(args)
+    if args.subcommand == CMD_NAME_VALIDATE:
+        from ainemo.cli.commands import run_validate
+
+        return run_validate(args)
+    parser.print_help(sys.stderr)
+    return 2
 
 
 __all__ = ["main"]

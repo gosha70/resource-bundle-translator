@@ -1,9 +1,10 @@
 # Cycle 1 — Foundation: Adapters + Translation Memory + Validators
 
 - **ID**: 0001
-- **Appetite**: 6 weeks
-- **Status**: shaped
-- **Owner**: TBD
+- **Appetite**: 6w (wall-clock ceiling; actual session execution ≪ appetite)
+- **Status**: shipped
+- **Owner**: gosha70
+- **Shipped**: 2026-05-03 on branch `cycle-1/foundation`. Outcomes + scope-hammer notes recorded in the [Outcomes](#outcomes) section below.
 
 ## Problem
 
@@ -114,8 +115,8 @@ Adapter implementations to ship in this cycle:
 |---|---|---|
 | `JavaPropertiesAdapter` | `core/adapters/java_properties.py` | Reuses logic from current `resource_bundle_generator.py`, generalized. |
 | `I18NextJsonAdapter` | `core/adapters/i18next_json.py` | Nested JSON, dot-keyed flatten/unflatten. |
-| `GettextPoAdapter` | `core/adapters/gettext_po.py` | Use `polib`. Handles plurals via msgstr[0..N]. |
-| `XliffAdapter` | `core/adapters/xliff.py` | XLIFF 2.0 only. Use `lxml`. |
+| `GettextPoAdapter` | `core/adapters/gettext_po.py` | Use `polib`. Handles plurals via msgstr[0..N]. *Scope-hammered at ship: 2-form output only — see [Outcomes](#outcomes).* |
+| `XliffAdapter` | `core/adapters/xliff.py` | XLIFF 2.0 only. Use `lxml`. *Scope-hammered at ship: inline markup dropped — see [Outcomes](#outcomes).* |
 
 ICU parsing centralizes in `core/icu.py` (wrap `pyicu` or a pure-Python parser like `babel.messages`). Adapters that *can* contain ICU (`.properties`, JSON, `.po`) call into it; XLIFF handles ICU at the `<segment>` level natively.
 
@@ -248,8 +249,8 @@ Vertical slices, each shippable in 1–3 days. These become hill-chart items. Go
 1. **Segment + Placeholder data model + ICU parser wrapper** (1 day). Tests on a hand-curated fixture of 50 ICU messages from real OSS bundles.
 2. **`BundleAdapter` Protocol + `JavaPropertiesAdapter` migrated from existing code** (2 days). Old CLI delegates to the new adapter; behavior unchanged for `.properties` files.
 3. **`I18NextJsonAdapter`** (2 days). Nested JSON flatten/unflatten with dot-keys; preserves key ordering.
-4. **`GettextPoAdapter`** (2 days). `polib`-backed; handles plurals.
-5. **`XliffAdapter` (XLIFF 2.0)** (3 days). Read + write; preserve `<note>`, `<mrk>`, segment IDs.
+4. **`GettextPoAdapter`** (2 days). `polib`-backed; handles plurals. *Shipped scope-hammered to 2-form target output (msgid + msgid_plural → msgstr[0]/msgstr[1]). N-form output for Russian/Polish/Arabic/Czech is cycle-3+ work; the serializer passes through forms 2..N when supplied.*
+5. **`XliffAdapter` (XLIFF 2.0)** (3 days). Read + write; preserve `<note>`, segment IDs. *Shipped without `<mrk>`/`<ph>`/`<sc>`/`<ec>` inline-markup preservation: the cycle-1 attempt to preserve them as XML strings serialized as escaped text (`<ph/>` → `&lt;ph/&gt;`), so cycle 1 drops them honestly with a DEBUG log. Cycle 2+ rebuilds inline children as real XML nodes.*
 6. **`SqliteTranslationMemory`: schema + exact-match lookup + store** (2 days). No embeddings yet. Wire into pipeline.
 7. **Embedding-based fuzzy match** (3 days). MiniLM model lazy-loaded, 384-dim cosine, threshold tunable, returns top-1 hit above threshold. Benchmark: TM lookup p95 < 50ms for 50k-segment corpus.
 8. **Validators: placeholder parity + ICU syntax + length budget + forbidden terms** (3 days). Pipeline integration; CLI surfaces violations.
@@ -311,3 +312,35 @@ These should be answered before betting:
 - **MiniLM download in CI** could slow down test runs. Mitigation: cache in CI step; mock the embedding step in unit tests; only the integration suite actually loads the model.
 - **XLIFF 2.0 parsing complexity** is higher than other formats. If scope 5 blows past 3 days, scope-hammer XLIFF down to read-only (parse but not serialize) and defer write to cycle 2 cooldown.
 - **Backward compatibility with existing CLI users**. The old `cli.resource_bundle_generator` and `cli.resource_bundle_git` modules continue to work as deprecation shims for one release; the new entry point is `nemo translate` (or chosen equivalent — see open question on the binary name during cycle 0).
+
+## Outcomes
+
+Shipped 2026-05-03 on branch `cycle-1/foundation`. All 12 scopes landed; 216 tests passing across `tests/unit/`, `tests/e2e/`, and `tests/benchmarks/` on the 3.10/3.11/3.12 Python matrix. Ruff clean, ruff format clean, mypy strict clean on `src/ainemo`.
+
+**Headline deliverables:**
+- `core/segment.py` (Segment + Placeholder + TranslatedSegment + PlaceholderKind enum + fingerprint).
+- `core/icu.py` (pure-Python ICU MessageFormat parser; positional / named / plural / select / selectordinal kinds; branch decomposition for ICU types; tolerant of malformed input).
+- `core/adapters/{base,java_properties,i18next_json,gettext_po,xliff}.py` — four adapters behind one Protocol, each with round-trip-identity contract tests on ≥10 fixtures.
+- `core/tm/{base,sqlite}.py` (SQLite TM + exact + embedding-based fuzzy lookup; 50k linear cosine scan benchmark gated by `pytest -m benchmark`).
+- `core/validators/{base,placeholder,icu,length,forbidden}.py` (four validators with severity-aware pipeline integration).
+- `core/pipeline.py` (TranslationPipeline orchestrator; per-segment outcome capture; strict-mode warning escalation).
+- `cli/{__init__,commands}.py` (`nemo translate / tm stats / validate`).
+- `docs/{adapters,translation-memory,validators}.md`.
+
+**Scope-hammered at ship** (intentional cycle-1 scope reductions; pinned by regression tests so cycle 2+ has the contract clearly):
+
+1. **Gettext plural output is 2-form only.** The pitch's "msgstr[0..N]" promise is too broad for cycle 1 — gettext sources only carry two source forms (msgid + msgid_plural), so the cycle-1 pipeline produces only forms 0 and 1. Target languages with more plural categories (Russian/Polish/Arabic/Czech) get under-specified PO output. The serializer iterates *every* supplied form index, so cycle-3+ N-form generation is purely caller-side work once the Provider Protocol gains target-language CLDR plural-rule awareness. Pin: `tests/unit/test_gettext_po_adapter.py::test_serialize_passes_through_n_form_plurals`.
+2. **XLIFF inline markup is dropped, not preserved.** The pitch's "preserve `<mrk>`" promise was implemented as "preserve as XML string in source_text" — but lxml escapes those strings on serialize, emitting `&lt;ph/&gt;` instead of `<ph/>`. That's silently-broken XLIFF, worse than dropping. Cycle 1 drops inline children with a DEBUG log; cycle 2+ rebuilds them as real XML nodes on serialize. Pin: `tests/unit/test_xliff_adapter.py::test_parse_drops_inline_markup_cleanly` and `::test_serialize_does_not_escape_brackets_in_text`.
+3. **Cycle-1 CLI ships with a `_NoOpProvider`.** The pitch implied the pipeline runs against a real LLM; the cycle-1 implementation wires the Provider Protocol but ships with a placeholder provider that returns source text unchanged. This validates the full pipeline plumbing (parse → TM → validators → serialize) on real files end-to-end, but real-LLM translation against NLLB/OpenAI/Anthropic/Ollama lands in cycle 2 with the provider router and `nemo daemon`. Documented in `docs/` and the README's CLI section.
+4. **Open question 1 (pyicu vs pure-Python ICU)** resolved at build time: pure-Python implementation in `core/icu.py`, no `pyicu` dependency. Cycle 2+ swaps if real-world corner cases hit a wall.
+5. **Open question 2 (embedding model choice)** resolved at build time: `paraphrase-multilingual-MiniLM-L12-v2` shipped per pitch recommendation; cycle 3+ benchmark + reconsideration window remains open.
+6. **Open question 3 (TM file location)** resolved: `./.ainemo/tm.sqlite` per-project, `--tm-path` flag for override.
+7. **Open question 4 (TM commit policy)** resolved at cycle 0: `.ainemo/` is in `.gitignore` by default; per-project opt-in.
+8. **Open question 5 (adapter auto-detection)** resolved: `--format` wins; otherwise extension-keyed dict in `cli/commands.py`. Single-extension formats (`.properties`, `.po`, `.xlf`/`.xliff`) auto-detect cleanly; `.json` defaults to `i18next-json` (cycle 6+ may add ARB / generic-JSON disambiguation).
+
+**Carried forward to cycle 2:**
+- Delete `src/ainemo/_legacy/` and the four top-level deprecation shims (`languages.py`, `translation.py`, `translation_request.py`, `translation_service.py`) once the cycle-2 provider router migration is done. Cycle-1 ships these modules unchanged because the cycle-1 CLI's `_NoOpProvider` still touches the legacy types through `providers/base.py`.
+- Remove the matching `[tool.ruff].extend-exclude` and `[tool.mypy.overrides] ignore_errors` entries in `pyproject.toml` as the legacy modules delete.
+- Wire real providers (NLLB, OPUS, OpenAI, **Anthropic + Ollama new**) to the cycle-1 Provider Protocol; introduce `ProviderRouter` with cost/latency tracking writing to `~/.ainemo/usage.jsonl`; introduce `nemo daemon` JSON-over-stdio for the Gradle plugin.
+- Rebuild XLIFF inline markup as real XML nodes on serialize.
+- Optionally: cycle-3+ N-form gettext plural generation once the Provider Protocol becomes target-language-aware.
