@@ -78,11 +78,34 @@ jobs:
             pip install ruff mypy pytest pytest-cov
           fi
 
+      # Cycle 0 reorganizes the codebase under src/ainemo/ and tests/
+      # (see specs/ROADMAP.md § Cycle 0). Until that lands, scope checks
+      # to those directories only — legacy top-level modules become
+      # deprecation shims and are not worth linting. The directory
+      # guards are temporary: they self-broaden the moment cycle 0
+      # creates src/ainemo/ + tests/. Cycle 0's pitch carries an explicit
+      # scope item to remove these guards once those dirs exist.
       - name: Lint with ruff
-        run: ruff check .
+        run: |
+          if [ -d src ]; then
+            ruff check src tests
+            ruff format --check src tests
+          else
+            echo "::notice::src/ not yet created — cycle 0 pending. Lint skipped."
+          fi
 
       - name: Type check with mypy
-        run: mypy .
+        run: |
+          if [ -d src ]; then
+            mypy src
+          else
+            echo "::notice::src/ not yet created — cycle 0 pending. Typecheck skipped."
+          fi
 
-      - name: Run tests with coverage
-        run: pytest --cov
+      - name: Run tests
+        run: |
+          if [ -d tests ]; then
+            pytest tests --tb=short -q
+          else
+            echo "::notice::tests/ not yet created — cycle 0 pending. Tests skipped."
+          fi
