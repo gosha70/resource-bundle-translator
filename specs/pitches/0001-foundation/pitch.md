@@ -254,7 +254,7 @@ Vertical slices, each shippable in 1–3 days. These become hill-chart items. Go
 7. **Embedding-based fuzzy match** (3 days). MiniLM model lazy-loaded, 384-dim cosine, threshold tunable, returns top-1 hit above threshold. Benchmark: TM lookup p95 < 50ms for 50k-segment corpus.
 8. **Validators: placeholder parity + ICU syntax + length budget + forbidden terms** (3 days). Pipeline integration; CLI surfaces violations.
 9. **`TranslationPipeline` orchestrator** (2 days). Replaces `translation_service.py`. Old module → deprecation shim.
-10. **CLI surface update** (2 days). New flags: `--format` (auto-detected from extension by default), `--tm-path` (default `./.nemo/tm.sqlite`), `--strict` (fail run on any validator error).
+10. **CLI surface update** (2 days). New flags: `--format` (auto-detected from extension by default), `--tm-path` (default `./.ainemo/tm.sqlite`), `--strict` (fail run on any validator error).
 11. **Test corpus + benchmark harness** (2 days). 5 real OSS bundles × 4 formats; reproducible report on cache-hit rate, validator pass rate, p50/p95 latency.
 12. **Documentation** (1 day). README updated; `docs/adapters.md`, `docs/translation-memory.md`, `docs/validators.md` written.
 
@@ -301,8 +301,8 @@ These should be answered before betting:
 
 1. **Pure-Python ICU parser vs. `pyicu` C-extension?** `pyicu` is faster and more correct but adds a heavy build dependency. Pure-Python (`babel.messages.format` or hand-rolled) is portable but may miss edge cases. **Recommendation**: start pure-Python with explicit unsupported-feature warnings; switch to `pyicu` if real users hit a wall.
 2. **Embedding model choice.** MiniLM-L12 (384-dim, 120MB, multilingual) vs LaBSE (768-dim, 1.7GB, more accurate) vs E5-multilingual (newer, better but bigger). **Recommendation**: MiniLM-L12 for v1; benchmark in scope 11 and reconsider.
-3. **TM file location.** `./.nemo/tm.sqlite` (per-project) vs `~/.nemo/tm.sqlite` (per-user). **Recommendation**: per-project default, per-user via flag — most users want TM committed to git for team sharing of cached translations.
-4. **Should the TM commit-to-git by default?** Encourage yes — it makes CI runs deterministic and zero-cost. Document in README.
+3. **TM file location.** `./.ainemo/tm.sqlite` (per-project) vs `~/.ainemo/tm.sqlite` (per-user). **Recommendation**: per-project default, per-user via flag.
+4. **Should the TM commit-to-git by default?** **No — opt-in only.** The TM is a binary file containing source strings, translated strings, and provider/model metadata that may be proprietary; it also grows with usage and conflicts in normal git workflows. Default `.gitignore` excludes `.ainemo/`. Teams that want shared cached translations for deterministic, zero-cost CI can opt in per-project. Document the privacy and repo-size trade-offs in the README before recommending the opt-in.
 5. **Adapter auto-detection precedence.** Same extension can mean different formats (`.json` could be i18next, ARB, or generic). **Recommendation**: explicit `--format` flag wins; on auto-detect, ambiguous extensions log a warning and pick the first registered adapter.
 
 ## Risks

@@ -86,17 +86,19 @@ This is what makes it Spec-Driven: the spec is part of the artifact, not a throw
 
 ```
 specs/
-├── README.md                       (this file — methodology)
-├── ROADMAP.md                      (master Shape-Up roadmap, all cycles)
+├── README.md                            (this file — methodology)
+├── ROADMAP.md                           (master Shape-Up roadmap, all cycles)
 ├── pitches/
-│   ├── 0001-foundation.md          (cycle 1 — fully shaped)
-│   ├── 0002-providers-gradle.md    (cycle 2 — stub, shape during cooldown)
-│   ├── 0003-kuzu-termbase.md       (cycle 3 — stub)
-│   ├── 0004-domain-pack-legal.md   (cycle 4 — stub)
-│   ├── 0005-reviewer-ui.md         (cycle 5 — stub)
-│   └── 0006-multi-platform.md      (cycle 6 — stub)
-└── adr/                            (architecture decision records, created as decisions are made)
+│   └── <NNNN-slug>/                     (one directory per pitch)
+│       ├── pitch.md                     (problem, solution shape, scopes, no-gos — required)
+│       ├── plan.md                      (build-phase implementation plan — optional, added after betting)
+│       ├── spec.md                      (deeper SDD spec if pitch.md interfaces aren't enough — optional)
+│       ├── tasks.md                     (task breakdown for scope-executor — added during build)
+│       └── hill.json                    (hill-chart state per scope — created on /cycle-start)
+└── adr/                                 (architecture decision records, created as decisions are made)
 ```
+
+Cycle 1 lives at `pitches/0001-foundation/pitch.md`. Future cycles (0002 — providers + Gradle, 0003 — Kuzu termbase, 0004 — domain pack legal-en, 0005 — reviewer UI, 0006 — multi-platform) will be shaped during cooldowns and land under their own `pitches/<NNNN-slug>/` directories.
 
 ## See also
 

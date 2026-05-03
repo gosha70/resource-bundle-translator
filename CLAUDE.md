@@ -83,7 +83,7 @@ gradle-plugin/                # cycle 2+ — separate module, wraps Python core 
 - **Glossary terms** are tokenized to `[i~~i]` (NLLB-style) or `_TERM` (Marian-style) before translation; restored after. Adapter chooses the token format.
 - **Numbered placeholders** (`{0}`, `{1}`) and named (`{name}`) follow the same encode/decode pattern.
 - **ICU placeholders** (`{count, plural, ...}`) preserve their inner structure; the parser identifies branches and treats each as its own translatable text.
-- **TM commit policy**: commit `./.ainemo/tm.sqlite` to git by default — team-shared cached translations make CI deterministic and zero-cost.
+- **TM commit policy**: project TM (`./.ainemo/tm.sqlite`) is **opt-in** for git tracking, not default. The TM contains source strings, translated strings, and provider/model metadata — potentially proprietary product text — and is a binary file that grows and conflicts in normal git workflows. Default `.gitignore` excludes `.ainemo/`. Teams that want shared cached translations for deterministic, zero-cost CI may opt in per-project; the README and `nemo tm init` will document the privacy and repo-size trade-offs before recommending it.
 - **Embedding model**: pinned in config (`paraphrase-multilingual-MiniLM-L12-v2`); never hardcoded in pipeline code.
 - **Fuzzy threshold**: 0.85 default, tunable per project. Below threshold = miss = forward to provider.
 - **API keys** via env vars only (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.); never in config files.
@@ -100,7 +100,7 @@ gradle-plugin/                # cycle 2+ — separate module, wraps Python core 
 ## Translation Memory Rules
 
 - `SqliteTranslationMemory` is the default backend. Other backends must implement `TranslationMemory` protocol.
-- Schema: see `specs/pitches/0001-foundation.md` § "Data model". Don't drift from it without an ADR.
+- Schema: see `specs/pitches/0001-foundation/pitch.md` § "Data model". Don't drift from it without an ADR.
 - Exact match before fuzzy match. Fuzzy uses cosine over MiniLM embeddings; linear scan acceptable up to ~100k segments. Add a vector index only if a benchmark shows it matters.
 - Every translation is stored after validation passes. Failed validations never enter the TM.
 - TM stats (size, hit rate) exposed via `nemo tm stats` CLI.
@@ -172,7 +172,7 @@ This project uses **Spec-Driven Development on top of Shape-Up cycles**. Methodo
 - **Methodology**: [`specs/README.md`](specs/README.md) — pitch template, cadence, lifecycle states, file layout.
 - **Roadmap**: [`specs/ROADMAP.md`](specs/ROADMAP.md) — strategic positioning, north-star outcomes, all 7 cycles, program-level risks.
 - **Active pitches**: `specs/pitches/<NNNN-slug>/{pitch.md, plan.md, spec.md, tasks.md, hill.json}`.
-- **Cycle 1 (foundation)** is fully shaped at [`specs/pitches/0001-foundation.md`](specs/pitches/0001-foundation.md).
+- **Cycle 1 (foundation)** is fully shaped at [`specs/pitches/0001-foundation/pitch.md`](specs/pitches/0001-foundation/pitch.md).
 
 ### Workflow agents (from `code-copilot-team`'s Shape-Up extension)
 

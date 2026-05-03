@@ -71,7 +71,7 @@ Each cycle below is a single Shape-Up bet. Cycles 0–1 are committed; 2 is shap
 
 ## Cycle 1 — Foundation: Adapters + TM + Validators (6 weeks)
 
-**Pitch**: [pitches/0001-foundation.md](pitches/0001-foundation.md) — fully shaped, ready for betting.
+**Pitch**: [pitches/0001-foundation/pitch.md](pitches/0001-foundation/pitch.md) — fully shaped, ready for betting.
 
 **Outcome**: AI-NEMO can translate four bundle formats (`.properties`, i18next JSON, gettext `.po`, XLIFF 2.0), preserves ICU MessageFormat correctly, caches results in a SQLite-backed translation memory with fuzzy match, and validates every output against placeholder/ICU/length rules.
 
