@@ -132,11 +132,21 @@ class TranslatedSegment:
     """Provider id that produced this translation (e.g. ``"openai"``,
     ``"nllb"``, ``"manual"``)."""
 
-    confidence: float | None
+    model: str = ""
+    """Model id within the provider — e.g. ``"gpt-4o-2024-11-20"`` for
+    ``provider="openai"``, ``"claude-sonnet-4-5-20250929"`` for
+    ``provider="anthropic"``, ``"nllb-200-distilled-600M"`` for
+    ``provider="nllb"``. Cycle-2 introduced this so the TM keys on
+    ``(fingerprint, target_lang, provider, model)`` — two models behind
+    one provider id no longer overwrite each other's cached
+    translations. Empty string for cycle-1-era TM rows or when the
+    provider does not expose a model id (e.g. legacy ``manual`` source)."""
+
+    confidence: float | None = None
     """Optional 0..1 confidence score. ``None`` when the provider does
     not expose one."""
 
-    source: TranslationSource
+    source: TranslationSource = TRANSLATION_SOURCE_PROVIDER
     """Where the translation came from — see ``TRANSLATION_SOURCE_*``."""
 
 

@@ -166,15 +166,18 @@ class TranslationPipeline:
         else:
             # Cycle-2: provider returns ProviderResult (rich payload
             # with model id, tokens, latency, cost). The pipeline
-            # unwraps `target_text` for the TM and validators; the
-            # router (when wired in scope 4) records the full
-            # ProviderResult to UsageLog.
+            # threads ``result.model`` into the TranslatedSegment so
+            # the TM keys on (fingerprint, target_lang, provider, model)
+            # — two models behind one provider id cache independently.
+            # The router (scope 4) records the full ProviderResult to
+            # UsageLog.
             result = self._provider.translate(segment, target_lang)
             translated = TranslatedSegment(
                 segment=segment,
                 target_lang=target_lang,
                 target_text=result.target_text,
                 provider=self._provider.provider_id,
+                model=result.model,
                 confidence=result.confidence,
                 source=TRANSLATION_SOURCE_PROVIDER,
             )

@@ -175,6 +175,43 @@ def test_store_overwrites_for_same_provider(tmp_path: Path) -> None:
     tm.close()
 
 
+def test_different_models_under_same_provider_coexist(tmp_path: Path) -> None:
+    """Cycle-2 contract pin: two models behind the same provider id
+    cache independently. Without the model in the TM PK,
+    ``gpt-4o-2024-11-20`` and ``gpt-4-turbo`` translations of the
+    same source segment overwrite each other, breaking
+    model-specific routing."""
+    tm = SqliteTranslationMemory(tmp_path / "tm.sqlite")
+    seg = _seg()
+    tm.store(
+        TranslatedSegment(
+            segment=seg,
+            target_lang=_LANG_DE,
+            target_text="From GPT-4o",
+            provider="openai",
+            model="gpt-4o-2024-11-20",
+            confidence=0.9,
+            source=TRANSLATION_SOURCE_PROVIDER,
+        )
+    )
+    tm.store(
+        TranslatedSegment(
+            segment=seg,
+            target_lang=_LANG_DE,
+            target_text="From GPT-4 Turbo",
+            provider="openai",
+            model="gpt-4-turbo",
+            confidence=0.9,
+            source=TRANSLATION_SOURCE_PROVIDER,
+        )
+    )
+
+    stats = tm.stats()
+    # Two distinct rows in the translations table — not one overwrite.
+    assert stats.translation_count == 2
+    tm.close()
+
+
 def test_different_providers_coexist(tmp_path: Path) -> None:
     """Two providers translating the same segment store independently;
     the most recent (by created_at) wins on lookup."""
