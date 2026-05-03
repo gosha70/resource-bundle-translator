@@ -36,6 +36,11 @@ dependencies = [
     "sacremoses",
     "sentencepiece",
     "openai",
+    # Cycle 1 — Foundation: bundle adapters and translation memory.
+    "polib>=1.2",                # gettext .po reading/writing
+    "lxml>=5.0",                 # XLIFF 2.0 read/write
+    "sentence-transformers>=2.7", # MiniLM embeddings for fuzzy TM lookup
+    "numpy>=1.26",               # cosine similarity for TM scan
 ]
 
 [project.optional-dependencies]
@@ -151,6 +156,10 @@ module = [
     "sentencepiece",
     "openai.*",
     "flask.*",
+    "polib",
+    "lxml.*",
+    "sentence_transformers.*",
+    "numpy.*",
 ]
 ignore_missing_imports = true
 
