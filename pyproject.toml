@@ -1,0 +1,187 @@
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ai-nemo"
+version = "0.1.0"
+description = "Networked Engine for Multilingual Ontologies — knowledge-graph-grounded localization for software."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "EGOGE" }]
+keywords = [
+    "localization",
+    "i18n",
+    "translation",
+    "knowledge-graph",
+    "termbase",
+    "resource-bundle",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Internationalization",
+    "Topic :: Software Development :: Localization",
+]
+dependencies = [
+    "transformers",
+    "flask",
+    "torch",
+    "sacremoses",
+    "sentencepiece",
+    "openai",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff",
+    "mypy",
+    "pytest",
+    "pytest-cov",
+]
+
+[project.scripts]
+nemo = "ainemo.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/gosha70/resource-bundle-translator"
+Repository = "https://github.com/gosha70/resource-bundle-translator"
+Roadmap = "https://github.com/gosha70/resource-bundle-translator/blob/main/specs/ROADMAP.md"
+"Cycle 1 pitch" = "https://github.com/gosha70/resource-bundle-translator/blob/main/specs/pitches/0001-foundation/pitch.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ainemo"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/ainemo",
+    "specs",
+    "tests",
+    "README.md",
+    "LICENSE",
+    "pyproject.toml",
+]
+
+# ---------------------------------------------------------------------------
+# Linting (ruff). Cycle 0 keeps default rule set (E + F). Cycle 1+ tightens.
+# Legacy code that's deleting at end of cycle 1 is excluded from enforcement
+# per the rabbit hole "Don't try to make CI green on legacy code"
+# (see specs/pitches/0000-rebrand-stabilize/pitch.md § Rabbit holes).
+# Cycle 1's pitch carries an explicit scope item to remove these excludes
+# as legacy modules delete.
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = [
+    "scratch",
+    "src/ainemo/_legacy",
+    "src/ainemo/providers",
+    "src/ainemo/app",
+    "src/ainemo/config",
+    "src/ainemo/utils",
+    "src/ainemo/cli/resource_bundle_generator.py",
+    "src/ainemo/cli/resource_bundle_git.py",
+    "languages.py",
+    "translation.py",
+    "translation_request.py",
+    "translation_service.py",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+# ---------------------------------------------------------------------------
+# Typechecking (mypy strict per AGENTS.md § Stack). Same exclusion logic as
+# ruff: legacy and moved-as-is code is non-strict for cycle 0; cycle 1+
+# tightens.
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.10"
+strict = true
+mypy_path = "src"
+explicit_package_bases = true
+namespace_packages = true
+
+[[tool.mypy.overrides]]
+module = "ainemo._legacy.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "ainemo.providers.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "ainemo.app.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "ainemo.config.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "ainemo.utils.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "ainemo.cli.resource_bundle_generator"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "ainemo.cli.resource_bundle_git"
+ignore_errors = true
+
+# Top-level deprecation shims — same treatment.
+[[tool.mypy.overrides]]
+module = ["languages", "translation", "translation_request", "translation_service"]
+ignore_errors = true
+
+# Vendor libraries without type stubs. Cycle 1+ may add per-library stubs.
+[[tool.mypy.overrides]]
+module = [
+    "transformers.*",
+    "torch.*",
+    "sacremoses",
+    "sentencepiece",
+    "openai.*",
+    "flask.*",
+]
+ignore_missing_imports = true
+
+# ---------------------------------------------------------------------------
+# Pytest (also configured in pytest.ini for legacy compatibility).
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "7.0"
+python_files = ["test_*.py"]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+markers = [
+    "unit: fast, isolated unit test",
+    "integration: real subsystems (sqlite, embedding model)",
+    "e2e: full pipeline run on a real bundle fixture",
+    "slow: opt-in slow test",
+    "benchmark: performance benchmark, manual run",
+]
+
+[tool.coverage.run]
+source = ["src/ainemo"]
+branch = true
+omit = [
+    "src/ainemo/_legacy/*",
+    "src/ainemo/providers/*",
+    "src/ainemo/app/*",
+    "src/ainemo/config/*",
+    "src/ainemo/utils/*",
+    "src/ainemo/cli/resource_bundle_*.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
