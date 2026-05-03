@@ -238,7 +238,7 @@ Plugin Maven coordinates: **`com.egoge.ai.nemo:translate-gradle-plugin`** per AG
 4. **`ProviderRouter` (`providers/router.py`)** — config-driven routing, default provider, per-rule precedence. Records every call to UsageLog. Unit tests cover precedence, fallback to default, rate-limit retry path. Routing config schema in `providers/config/routes.yaml`.
 5. **Migrate existing providers to the Protocol**: NLLB, OPUS, OpenAI. Each gets a sibling `_client.py` (lazy SDK-client construction) and `_prompts.py` (prompt-template constants). Delete the legacy `TranslatorModel` ABC. Delete `_legacy/` data modules + the 4 top-level shims (cycle-0 carryover). Update CLI to call the router. Existing cycle-1 integration tests should keep passing.
 6. **Add `AnthropicProvider`** — `providers/anthropic/`. Uses Anthropic SDK; prompt caching for system prompt + glossary; `temperature=0`. Unit tests (mocked SDK) + integration test gated on `ANTHROPIC_API_KEY`.
-7. **Add `OllamaProvider`** — `providers/ollama/`. Local HTTP client; `temperature=0`; default model id is a /bet-time decision (open question 6), held in `providers/ollama/_models.py` as a named constant — never inlined. Unit tests + integration test gated on a running Ollama daemon.
+7. **Add `OllamaProvider`** — `providers/ollama/`. Local HTTP client; `temperature=0`; default model id is a /bet-time decision (open question 5), held in `providers/ollama/_models.py` as a named constant — never inlined. Unit tests + integration test gated on a running Ollama daemon.
 8. **`nemo provider` CLI subcommand** — `nemo provider list` (registered providers + their availability), `nemo provider stats [--since DATE]` (UsageLog summary). Argparse-based; idiomatic `--help`.
 
 **Half B — Gradle plugin:**
