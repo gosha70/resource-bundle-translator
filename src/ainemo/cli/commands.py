@@ -29,7 +29,8 @@ from ainemo.core.validators.forbidden import ForbiddenTermsValidator
 from ainemo.core.validators.icu import IcuSyntaxValidator
 from ainemo.core.validators.length import LengthBudgetValidator
 from ainemo.core.validators.placeholder import PlaceholderParityValidator
-from ainemo.providers.base import Provider
+from ainemo.providers._ids import PROVIDER_ID_NOOP
+from ainemo.providers.base import Provider, ProviderResult
 
 logger = logging.getLogger(__name__)
 
@@ -291,17 +292,29 @@ def run_validate(args: argparse.Namespace) -> int:
 class _NoOpProvider:
     """Cycle-1 placeholder provider. Returns source text unchanged.
 
-    Real translation against a live model is cycle-2 work
-    (``nemo daemon`` + provider router). The no-op lets us exercise
-    the pipeline end-to-end on real files in cycle 1 — every segment
-    "translates" to itself, validators pass trivially, and the TM
-    fills with placeholder entries that cycle 2 overwrites.
+    Cycle-2 scope 5 migrates the real backends to the new Provider
+    Protocol; until then the CLI ships with this no-op so the pipeline
+    runs end-to-end. Validators pass trivially, the TM fills with
+    placeholder entries, and the router (once wired) records zero-cost
+    zero-latency calls.
     """
 
-    provider_id: ClassVar[str] = "noop"
+    provider_id: ClassVar[str] = PROVIDER_ID_NOOP
 
-    def translate(self, segment: Segment, target_lang: str) -> str:
-        return segment.source_text
+    def translate(self, segment: Segment, target_lang: str) -> ProviderResult:
+        return ProviderResult(
+            target_text=segment.source_text,
+            model=PROVIDER_ID_NOOP,
+            input_tokens=None,
+            output_tokens=None,
+            latency_ms=0,
+            cost_usd=None,
+            confidence=None,
+        )
+
+    def supports(self, source_lang: str, target_lang: str) -> bool:
+        # No-op accepts every pair — it just echoes input.
+        return True
 
 
 def _resolve_adapter(format_id: str | None, source_path: Path) -> BundleAdapter:

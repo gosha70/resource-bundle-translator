@@ -12,11 +12,16 @@ from ainemo.core.segment import (
 )
 from ainemo.core.tm.sqlite import SqliteTranslationMemory
 from ainemo.core.validators.placeholder import PlaceholderParityValidator
-from ainemo.providers.base import Provider
+from ainemo.providers.base import Provider, ProviderResult
 
 _LANG_EN_US = "en-US"
 _LANG_DE = "de-DE"
 _LANG_FR = "fr-FR"
+
+# Test-stub model id. Concrete providers use real ids from
+# `ainemo.providers._ids`; stubs use this so tests don't accidentally
+# pass through cycle-2 router logic that branches on provider_id.
+_FAKE_MODEL = "test-fake-1.0"
 
 
 class _FakeProvider:
@@ -27,9 +32,15 @@ class _FakeProvider:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str]] = []
 
-    def translate(self, segment: Segment, target_lang: str) -> str:
+    def translate(self, segment: Segment, target_lang: str) -> ProviderResult:
         self.calls.append((segment.source_text, target_lang))
-        return f"[{target_lang}] {segment.source_text}"
+        return ProviderResult(
+            target_text=f"[{target_lang}] {segment.source_text}",
+            model=_FAKE_MODEL,
+        )
+
+    def supports(self, source_lang: str, target_lang: str) -> bool:
+        return True
 
 
 class _DroppingProvider:
@@ -38,8 +49,7 @@ class _DroppingProvider:
 
     provider_id: ClassVar[str] = "dropping"
 
-    def translate(self, segment: Segment, target_lang: str) -> str:
-        # Strip everything between { and } including the braces
+    def translate(self, segment: Segment, target_lang: str) -> ProviderResult:
         out: list[str] = []
         in_placeholder = False
         for ch in segment.source_text:
@@ -51,7 +61,10 @@ class _DroppingProvider:
                 continue
             if not in_placeholder:
                 out.append(ch)
-        return "".join(out).strip()
+        return ProviderResult(target_text="".join(out).strip(), model=_FAKE_MODEL)
+
+    def supports(self, source_lang: str, target_lang: str) -> bool:
+        return True
 
 
 def _write_props(path: Path, body: str) -> None:
