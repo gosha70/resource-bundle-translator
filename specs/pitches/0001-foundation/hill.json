@@ -1,19 +1,20 @@
 {
   "pitch_id": "0001-foundation",
   "started_at": "2026-05-03",
+  "completed_at": "2026-05-03",
   "appetite_weeks": 6,
   "scopes": [
-    {"id": 1,  "name": "Segment + Placeholder data model + ICU parser wrapper", "status": "uphill", "moved_at": null},
-    {"id": 2,  "name": "BundleAdapter Protocol + JavaPropertiesAdapter",        "status": "uphill", "moved_at": null},
-    {"id": 3,  "name": "I18NextJsonAdapter",                                    "status": "uphill", "moved_at": null},
-    {"id": 4,  "name": "GettextPoAdapter",                                      "status": "uphill", "moved_at": null},
-    {"id": 5,  "name": "XliffAdapter (XLIFF 2.0)",                              "status": "uphill", "moved_at": null},
-    {"id": 6,  "name": "SqliteTranslationMemory: schema + exact match",         "status": "uphill", "moved_at": null},
-    {"id": 7,  "name": "Embedding-based fuzzy match",                           "status": "uphill", "moved_at": null},
-    {"id": 8,  "name": "Validators (placeholder, ICU, length, forbidden)",      "status": "uphill", "moved_at": null},
-    {"id": 9,  "name": "TranslationPipeline orchestrator",                      "status": "uphill", "moved_at": null},
-    {"id": 10, "name": "CLI surface update",                                    "status": "uphill", "moved_at": null},
-    {"id": 11, "name": "Test corpus + benchmark harness",                       "status": "uphill", "moved_at": null},
-    {"id": 12, "name": "Documentation",                                         "status": "uphill", "moved_at": null}
+    {"id": 1,  "name": "Segment + Placeholder data model + ICU parser wrapper", "status": "done", "moved_at": "2026-05-03"},
+    {"id": 2,  "name": "BundleAdapter Protocol + JavaPropertiesAdapter",        "status": "done", "moved_at": "2026-05-03"},
+    {"id": 3,  "name": "I18NextJsonAdapter",                                    "status": "done", "moved_at": "2026-05-03"},
+    {"id": 4,  "name": "GettextPoAdapter",                                      "status": "done", "moved_at": "2026-05-03"},
+    {"id": 5,  "name": "XliffAdapter (XLIFF 2.0)",                              "status": "done", "moved_at": "2026-05-03"},
+    {"id": 6,  "name": "SqliteTranslationMemory: schema + exact match",         "status": "done", "moved_at": "2026-05-03"},
+    {"id": 7,  "name": "Embedding-based fuzzy match",                           "status": "done", "moved_at": "2026-05-03"},
+    {"id": 8,  "name": "Validators (placeholder, ICU, length, forbidden)",      "status": "done", "moved_at": "2026-05-03"},
+    {"id": 9,  "name": "TranslationPipeline orchestrator",                      "status": "done", "moved_at": "2026-05-03"},
+    {"id": 10, "name": "CLI surface update",                                    "status": "done", "moved_at": "2026-05-03"},
+    {"id": 11, "name": "Test corpus + benchmark harness",                       "status": "done", "moved_at": "2026-05-03"},
+    {"id": 12, "name": "Documentation",                                         "status": "done", "moved_at": "2026-05-03"}
   ]
 }
