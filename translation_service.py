@@ -6,15 +6,11 @@
 """
 from __future__ import annotations
 
-import warnings as _warnings
+from ainemo._legacy import emit_legacy_shim_warning as _warn
 
-_warnings.warn(
-    "Top-level `translation_service` module is deprecated; import "
-    "`ainemo._legacy.translation_service.TranslationService` instead. "
-    "This shim is removed at the end of cycle 1.",
-    DeprecationWarning,
-    stacklevel=2,
-)
+_SHIM_NAME = "translation_service"
+
+_warn(_SHIM_NAME)
 
 from ainemo._legacy.translation_service import TranslationService  # noqa: E402, F401
 

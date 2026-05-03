@@ -7,6 +7,7 @@ method was called. The fix routes the iteration through
 ``self.translation_map.values()`` (the actual storage). This test pins
 that contract so the typo cannot return.
 """
+
 from __future__ import annotations
 
 from ainemo._legacy.languages import Language

@@ -12,11 +12,16 @@ boundary-handling branch that uses ``(?!\\w)`` lookahead for terms ending
 in non-word characters. These tests pin the corrected behavior so a
 future re-introduction breaks visibly.
 """
+
 from __future__ import annotations
 
 import re
 
 from ainemo.providers.opus.marian_mt_model import MarianTranslatorModel
+
+# Method name we're guarding against re-duplicating. Extracted as a
+# constant so the source-level check below has one canonical spelling.
+_PRESERVE_GLOSSARY_DEF: str = "def preserve_glossary_words"
 
 
 def _new_model() -> MarianTranslatorModel:
@@ -31,6 +36,11 @@ def _escaped(term: str) -> tuple[str, str]:
 
 
 def test_word_boundary_does_not_match_substring() -> None:
+    """The standalone `OK` must be replaced; the substring `OK` inside
+    `JOKEY` must not. Asserting on the full output string is the cleanest
+    expression of this contract — substring tests like
+    ``"OK" not in out.replace("_OK", "")`` are wrong because `JOKEY`
+    legitimately contains `OK` as a substring (J-O-K-E-Y)."""
     model = _new_model()
     preserved: dict[str, str] = {}
     out = model.preserve_glossary_words(
@@ -38,9 +48,7 @@ def test_word_boundary_does_not_match_substring() -> None:
         glossary=[_escaped("OK")],
         preserved_words=preserved,
     )
-    # `OK` matches; the OK inside JOKEY does not.
-    assert "OK" not in out.replace("_OK", "")
-    assert "JOKEY" in out
+    assert out == "Click _OK to confirm and avoid being JOKEY."
     assert preserved == {"_OK": "OK"}
 
 
@@ -87,9 +95,9 @@ def test_only_one_preserve_glossary_words_definition_exists() -> None:
     import inspect
 
     source = inspect.getsource(MarianTranslatorModel)
-    occurrences = source.count("def preserve_glossary_words")
+    occurrences = source.count(_PRESERVE_GLOSSARY_DEF)
     assert occurrences == 1, (
-        f"Expected exactly one preserve_glossary_words definition; "
-        f"found {occurrences}. The cycle-0 fix removed a duplicate that "
+        f"Expected exactly one {_PRESERVE_GLOSSARY_DEF!r}; found "
+        f"{occurrences}. The cycle-0 fix removed a duplicate that "
         f"shadowed the correct word-boundary version."
     )
