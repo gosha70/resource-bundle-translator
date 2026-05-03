@@ -6,7 +6,7 @@
     {"id": 1,  "name": "Provider Protocol finalized + ProviderResult",  "status": "done",   "moved_at": "2026-05-03"},
     {"id": 2,  "name": "UsageLog (~/.ainemo/usage.jsonl)",               "status": "done",   "moved_at": "2026-05-03"},
     {"id": 3,  "name": "with_retry helper (exponential backoff)",       "status": "done",   "moved_at": "2026-05-03"},
-    {"id": 4,  "name": "ProviderRouter",                                "status": "uphill", "moved_at": null},
+    {"id": 4,  "name": "ProviderRouter",                                "status": "done",   "moved_at": "2026-05-03"},
     {"id": 5,  "name": "Migrate NLLB/OPUS/OpenAI to Provider Protocol", "status": "uphill", "moved_at": null},
     {"id": 6,  "name": "AnthropicProvider (NEW)",                       "status": "uphill", "moved_at": null},
     {"id": 7,  "name": "OllamaProvider (NEW)",                          "status": "uphill", "moved_at": null},
