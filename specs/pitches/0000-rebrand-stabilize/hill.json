@@ -1,0 +1,15 @@
+{
+  "pitch_id": "0000-rebrand-stabilize",
+  "started_at": "2026-05-03",
+  "completed_at": "2026-05-03",
+  "appetite_weeks": 2,
+  "scopes": [
+    {"id": 1, "name": "Rename to AI-NEMO (in-repo)",                "status": "done", "moved_at": "2026-05-03"},
+    {"id": 2, "name": "Audit-bug fixes",                            "status": "done", "moved_at": "2026-05-03"},
+    {"id": 3, "name": "pyproject.toml migration",                   "status": "done", "moved_at": "2026-05-03"},
+    {"id": 4, "name": "Reorganize package layout",                  "status": "done", "moved_at": "2026-05-03"},
+    {"id": 5, "name": "print() to stdlib logging",                  "status": "done", "moved_at": "2026-05-03"},
+    {"id": 6, "name": "Tighten .github/workflows/python.yml",       "status": "done", "moved_at": "2026-05-03"},
+    {"id": 7, "name": "README rewrite",                             "status": "done", "moved_at": "2026-05-03"}
+  ]
+}

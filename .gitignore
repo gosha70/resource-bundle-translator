@@ -1,2 +1,39 @@
+# macOS / IDE
 .DS_Store
+.vscode/
+.idea/
+
+# Python build / cache artifacts
 __pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Tooling caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Generated lockfiles (cycle-0 decision: pyproject.toml is the source of
+# truth; lockfiles are local tooling state, not deliverables — see
+# specs/pitches/0000-rebrand-stabilize/pitch.md § Open questions Q1).
+uv.lock
+poetry.lock
+Pipfile.lock
+
+# AI-NEMO local state (cycle-1+ TM database, usage telemetry).
+# Per AGENTS.md § Translation-Domain Conventions: TM is opt-in for
+# git tracking, not default.
+.ainemo/

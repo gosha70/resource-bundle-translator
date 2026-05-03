@@ -16,32 +16,7 @@ permissions:
   contents: read
 
 jobs:
-  detect:
-    # Lightweight gate: classify how to install dependencies. A modern
-    # packaging manifest (pyproject.toml/setup.py/setup.cfg) is preferred;
-    # bare requirements.txt is supported as a fallback until the pyproject
-    # migration lands (see specs/pitches/0000-rebrand-stabilize/). Only
-    # repos with no manifest at all skip CI.
-    runs-on: ubuntu-latest
-    outputs:
-      manifest: ${{ steps.check.outputs.manifest }}
-    steps:
-      - uses: actions/checkout@v5
-      - id: check
-        run: |
-          if [[ -f pyproject.toml || -f setup.py || -f setup.cfg ]]; then
-            echo "manifest=pyproject" >> "$GITHUB_OUTPUT"
-          elif [[ -f requirements.txt ]]; then
-            echo "manifest=requirements" >> "$GITHUB_OUTPUT"
-            echo "::notice::No packaging manifest found; installing from requirements.txt and tooling pinned in workflow."
-          else
-            echo "manifest=none" >> "$GITHUB_OUTPUT"
-            echo "::notice::No Python manifest (pyproject.toml/setup.py/setup.cfg/requirements.txt) found — skipping Python CI."
-          fi
-
   test:
-    needs: detect
-    if: needs.detect.outputs.manifest != 'none'
     runs-on: ubuntu-latest
 
     strategy:
@@ -64,48 +39,22 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/huggingface
-          key: hf-${{ matrix.python-version }}-${{ hashFiles('**/pyproject.toml', '**/requirements*.txt') }}
+          key: hf-${{ matrix.python-version }}-${{ hashFiles('**/pyproject.toml') }}
           restore-keys: |
             hf-${{ matrix.python-version }}-
 
-      - name: Install dependencies
+      - name: Install package with dev extras
         run: |
           python -m pip install --upgrade pip
-          if [[ "${{ needs.detect.outputs.manifest }}" == "pyproject" ]]; then
-            pip install -e ".[dev]"
-          else
-            pip install -r requirements.txt
-            pip install ruff mypy pytest pytest-cov
-          fi
+          pip install -e ".[dev]"
 
-      # Cycle 0 reorganizes the codebase under src/ainemo/ and tests/
-      # (see specs/ROADMAP.md § Cycle 0). Until that lands, scope checks
-      # to those directories only — legacy top-level modules become
-      # deprecation shims and are not worth linting. The directory
-      # guards are temporary: they self-broaden the moment cycle 0
-      # creates src/ainemo/ + tests/. Cycle 0's pitch carries an explicit
-      # scope item to remove these guards once those dirs exist.
       - name: Lint with ruff
         run: |
-          if [ -d src ]; then
-            ruff check src tests
-            ruff format --check src tests
-          else
-            echo "::notice::src/ not yet created — cycle 0 pending. Lint skipped."
-          fi
+          ruff check .
+          ruff format --check .
 
       - name: Type check with mypy
-        run: |
-          if [ -d src ]; then
-            mypy src
-          else
-            echo "::notice::src/ not yet created — cycle 0 pending. Typecheck skipped."
-          fi
+        run: mypy src/ainemo
 
       - name: Run tests
-        run: |
-          if [ -d tests ]; then
-            pytest tests --tb=short -q
-          else
-            echo "::notice::tests/ not yet created — cycle 0 pending. Tests skipped."
-          fi
+        run: pytest --cov

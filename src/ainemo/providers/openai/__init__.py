@@ -1,0 +1,1 @@
+"""OpenAI managed-translation provider."""
