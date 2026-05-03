@@ -1,9 +1,9 @@
 # Cycle 1 — Foundation: Adapters + Translation Memory + Validators
 
 - **ID**: 0001
-- **Appetite**: 6 weeks
-- **Status**: shaped
-- **Owner**: TBD
+- **Appetite**: 6w (wall-clock ceiling; actual session execution ≪ appetite)
+- **Status**: building
+- **Owner**: gosha70
 
 ## Problem
 
