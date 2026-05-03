@@ -10,6 +10,7 @@ the model is already cached locally.
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import numpy as np
@@ -71,12 +72,24 @@ def _ts(
 
 
 def _stub_embedder(text: str) -> np.ndarray:
-    """Deterministic embedder that returns a 16-dim vector based on a
-    hash of the text. Identical text → identical vector; similar text
-    → distant vector (no semantic similarity captured). Good enough
-    to test exact/fuzzy logic without downloading a real model."""
-    rng = np.random.default_rng(seed=hash(text) & 0xFFFFFFFF)
-    return rng.random(16, dtype=np.float32)
+    """Cross-run-deterministic embedder that returns a 16-dim
+    mean-zero Gaussian vector based on a SHA-256 of the text.
+    Identical text → identical vector; different text → vectors
+    with cosine similarity centered at 0.
+
+    Why mean-zero Gaussian instead of ``rng.random()`` (uniform in
+    [0, 1])? Two random vectors with all-non-negative entries have
+    a positive-biased cosine similarity (often 0.7–0.95 in 16
+    dimensions), which made the stub frequently land above the 0.85
+    fuzzy threshold for "should miss" tests. Gaussian samples are
+    centered at 0 in every dimension, so two unrelated texts produce
+    near-orthogonal vectors with cosine similarity in roughly
+    [-0.4, 0.4]. SHA-256 is used as the seed source instead of
+    Python's built-in :func:`hash`, which is per-process-salted by
+    ``PYTHONHASHSEED``."""
+    digest = hashlib.sha256(text.encode("utf-8")).digest()
+    rng = np.random.default_rng(seed=int.from_bytes(digest[:8], "big"))
+    return rng.standard_normal(16, dtype=np.float32)
 
 
 def _identical_embedder(text: str) -> np.ndarray:

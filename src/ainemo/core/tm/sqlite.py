@@ -40,6 +40,7 @@ from pathlib import Path
 from typing import Any, Callable, Final, Iterator, Protocol, runtime_checkable
 
 import numpy as np
+from numpy.typing import NDArray
 
 from ainemo.core.segment import (
     TRANSLATION_SOURCE_EXACT_TM,
@@ -57,6 +58,12 @@ from ainemo.core.tm.base import (
     TmHit,
     TmStats,
 )
+
+# Type alias for the embedding arrays the TM produces and consumes.
+# `NDArray[np.float32]` is more precise than the bare `np.ndarray`
+# (which mypy strict on Python 3.10 rejects for missing type
+# parameters); the alias keeps signatures readable.
+_EmbeddingArray = NDArray[np.float32]
 
 # --- Module constants (no magic strings; AGENTS.md § Prohibited Patterns) ---
 
@@ -108,7 +115,7 @@ _META_KEY_SCHEMA_VERSION = "schema_version"
 class Embedder(Protocol):
     """Callable converting a string into a 1-D numpy array."""
 
-    def __call__(self, text: str) -> np.ndarray: ...
+    def __call__(self, text: str) -> _EmbeddingArray: ...
 
 
 class SqliteTranslationMemory:
@@ -363,15 +370,15 @@ def _placeholders_from_json(payload: str) -> tuple[Placeholder, ...]:
     )
 
 
-def _encode_embedding(arr: np.ndarray) -> bytes:
+def _encode_embedding(arr: _EmbeddingArray) -> bytes:
     return arr.astype(_EMBEDDING_DTYPE).tobytes()
 
 
-def _decode_embedding(blob: bytes) -> np.ndarray:
+def _decode_embedding(blob: bytes) -> _EmbeddingArray:
     return np.frombuffer(blob, dtype=_EMBEDDING_DTYPE)
 
 
-def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
+def _cosine_similarity(a: _EmbeddingArray, b: _EmbeddingArray) -> float:
     a_norm = np.linalg.norm(a)
     b_norm = np.linalg.norm(b)
     if a_norm == 0 or b_norm == 0:
@@ -381,7 +388,7 @@ def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
 
 def make_default_embedder(
     model_name: str = "paraphrase-multilingual-MiniLM-L12-v2",
-) -> Callable[[str], np.ndarray]:
+) -> Callable[[str], _EmbeddingArray]:
     """Lazy-loaded default embedder: ``sentence-transformers`` MiniLM.
 
     Constructed on first call so importing this module doesn't trigger
@@ -394,7 +401,7 @@ def make_default_embedder(
     # ignore_missing_imports — its returned types are Any anyway.
     model_holder: list[Any] = []
 
-    def _embed(text: str) -> np.ndarray:
+    def _embed(text: str) -> _EmbeddingArray:
         if not model_holder:
             from sentence_transformers import SentenceTransformer
 
