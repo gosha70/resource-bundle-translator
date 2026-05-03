@@ -10,13 +10,32 @@ Cycle-1 scope:
   Segment's ``source_text``; the Segment's ``key`` is the entry's
   ``msgctxt`` if present, otherwise the ``msgid`` itself (which
   matches gettext's catalog-key convention).
-- Plural entries: each ``msgstr[N]`` is its own Segment with key
-  ``"<base_key>#<N>"``. ``msgid`` populates the ``[0]`` Segment;
-  ``msgid_plural`` populates the ``[1]`` Segment. Cycle-1 design
-  choice: each plural form translates independently. The
-  PlaceholderParityValidator (scope 8) keeps placeholders consistent
-  across the forms; cycle-3+ termbase work may unify form-coherent
-  translation if quality demands it.
+- Plural entries (cycle-1 scope: **2-form source, 2-form target**):
+  gettext source PO files always carry exactly two source forms —
+  ``msgid`` (singular) and ``msgid_plural`` (plural). The adapter
+  produces two Segments per plural entry, keyed
+  ``"<base_key>#0"`` and ``"<base_key>#1"``, that translate
+  independently. Serialization writes the two corresponding target
+  translations to ``msgstr[0]`` and ``msgstr[1]``. **This is correct
+  only for target languages with two plural categories** — English,
+  German, Dutch, French, Spanish, Italian, Portuguese, Hebrew (after
+  the recent CLDR update), and most Western European languages.
+
+  Target languages with more plural categories — Russian (4: one,
+  few, many, other), Polish (3: one, few, many), Arabic (6),
+  Czech (3) — ARE NOT FULLY SUPPORTED in cycle 1. The adapter
+  emits only ``msgstr[0]`` and ``msgstr[1]``; the additional plural
+  forms required by the target language's ``Plural-Forms`` header
+  rule will be missing from the output PO. Most gettext runtimes
+  fall back to a defined form (typically ``msgstr[1]``) but this
+  is technically under-specified output.
+
+  Cycle 3+ (after the Provider Protocol gains target-language
+  awareness — translating each segment for each plural category
+  separately based on the target's CLDR rule) revisits this. If
+  you need correct N-form plural output today for Russian/Polish/
+  etc., do not use this adapter in cycle 1; track the cycle-3+
+  upgrade.
 - Translator comments (``# ``), extracted comments (``#. ``),
   reference comments (``#: ``), and flag comments (``#, ``) are all
   preserved on the Segment's ``metadata`` and round-tripped on
@@ -212,6 +231,19 @@ def _singular_entry_from_translated(ts: TranslatedSegment) -> polib.POEntry:
 
 
 def _plural_entry_from_translated(base_key: str, forms: list[TranslatedSegment]) -> polib.POEntry:
+    """Reassemble translated plural forms into a single POEntry.
+
+    **Cycle-1 scope: 2-form output.** The cycle-1 pipeline produces
+    only forms 0 and 1 from gettext sources (the only two forms the
+    source PO carries — ``msgid`` and ``msgid_plural``). The function
+    iterates *every* form index supplied so cycle-3+ callers that
+    pre-fill forms 2..N (after the Provider Protocol gains
+    target-language plural-rule awareness) get them written verbatim,
+    but cycle 1's output for languages with more than two plural
+    categories (Russian, Polish, Arabic, Czech, …) is
+    under-specified. See module docstring § "Plural entries" for the
+    full rationale and the cycle-3+ upgrade plan.
+    """
     forms_by_index: dict[int, TranslatedSegment] = {}
     for ts in forms:
         idx_str = ts.segment.metadata.get(METADATA_KEY_PLURAL_FORM_INDEX)
@@ -228,10 +260,14 @@ def _plural_entry_from_translated(base_key: str, forms: list[TranslatedSegment])
     msgid = forms_by_index[0].segment.source_text
     msgid_plural = forms_by_index[1].segment.source_text
     sample_metadata = forms_by_index[0].segment.metadata
+    # Iterate every supplied form index so a future N-form-aware
+    # caller passing forms 2..N gets them written. Cycle 1 itself
+    # supplies only 0 and 1.
+    msgstr_plural = {idx: ts.target_text for idx, ts in forms_by_index.items()}
     return polib.POEntry(
         msgid=msgid,
         msgid_plural=msgid_plural,
-        msgstr_plural={idx: ts.target_text for idx, ts in forms_by_index.items()},
+        msgstr_plural=msgstr_plural,
         msgctxt=sample_metadata.get(METADATA_KEY_MSGCTXT) or None,
         tcomment=sample_metadata.get(METADATA_KEY_TRANSLATOR_COMMENT) or "",
         comment=sample_metadata.get(METADATA_KEY_EXTRACTED_COMMENT) or "",

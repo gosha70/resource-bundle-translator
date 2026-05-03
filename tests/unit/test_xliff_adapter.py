@@ -146,6 +146,74 @@ def test_parse_preserves_notes(tmp_path: Path) -> None:
     assert seg.metadata[f"{METADATA_KEY_NOTE_PREFIX}reference"] == "src/ui.py:42"
 
 
+def test_parse_drops_inline_markup_cleanly(tmp_path: Path) -> None:
+    """Cycle-1 contract pin: XLIFF inline elements (<ph>, <mrk>, <sc>,
+    <ec>) inside <source> are NOT preserved in cycle 1. The parser
+    keeps surrounding text only; inline children are dropped with a
+    DEBUG log entry. This is intentional — preserving them as XML
+    strings (the earlier cycle-1 attempt) led to silently-broken
+    serialization where lxml escaped the angle brackets into
+    &lt;ph/&gt;. Cycle 2+ rebuilds inline children as real XML nodes.
+
+    This test pins the drop behavior so a future change has to update
+    both the tests and the adapter docstring together."""
+    src = tmp_path / "messages.xlf"
+    _write_xliff(
+        src,
+        '    <unit id="welcome">\n'
+        '      <segment id="s1">\n'
+        '        <source>Hello <ph id="x"/>!</source>\n'
+        "      </segment>\n"
+        "    </unit>",
+    )
+
+    segments = XliffAdapter().parse(src, _LANG_EN_US)
+    assert len(segments) == 1
+    # Inline <ph/> dropped; trailing "!" preserved.
+    assert segments[0].source_text == "Hello !"
+
+
+def test_serialize_does_not_escape_brackets_in_text(tmp_path: Path) -> None:
+    """If a Segment.source_text somehow contains angle-bracket
+    characters (e.g. someone hand-builds a Segment for a synthetic
+    test), serialize must escape them as XML entities — not emit
+    them as raw markup. This is the inverse of the inline-drop
+    contract: text content is treated as text, not as smuggled XML."""
+    seg = Segment(
+        key="u1#s1",
+        source_text="Tag <not-a-real-ph/> here",
+        source_lang=_LANG_EN_US,
+        metadata={
+            "xliff.file_id": "f1",
+            "xliff.unit_id": "u1",
+            "xliff.segment_id": "s1",
+        },
+    )
+    ts = TranslatedSegment(
+        segment=seg,
+        target_lang=_LANG_DE,
+        target_text="Tag <also-not-real/> here",
+        provider=_PROVIDER_TEST,
+        confidence=None,
+        source=TRANSLATION_SOURCE_PROVIDER,
+    )
+
+    out = tmp_path / "out.xlf"
+    XliffAdapter().serialize(out, (ts,), _LANG_DE)
+
+    raw = out.read_text(encoding="utf-8")
+    # Brackets are XML-escaped (NOT emitted as live markup).
+    assert "&lt;not-a-real-ph/&gt;" in raw
+    assert "&lt;also-not-real/&gt;" in raw
+    assert "<not-a-real-ph/>" not in raw
+
+    # And re-parsing produces the original source text unchanged
+    # (parse reads <source>, so we recover the source — escaped
+    # brackets decode back into literal angle brackets).
+    re_parsed = XliffAdapter().parse(out, _LANG_EN_US)
+    assert re_parsed[0].source_text == "Tag <not-a-real-ph/> here"
+
+
 def test_parse_rejects_wrong_root_element(tmp_path: Path) -> None:
     src = tmp_path / "messages.xlf"
     src.write_text('<?xml version="1.0"?>\n<not_xliff/>\n', encoding="utf-8")

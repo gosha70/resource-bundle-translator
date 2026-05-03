@@ -2,7 +2,7 @@
 
 **Networked Engine for Multilingual Ontologies** — knowledge-graph-grounded terminology and localization for software, with versioned domain packs and CC0/CC-BY ontology integrations. Distributed under the **egoge.com** namespace alongside [AI-ATLAS](https://github.com/gosha70/ai-atlas).
 
-> **Status**: pre-release. Cycle 0 (rebrand & stabilize) **shipped** 2026-05-03 — see the [retrospective](specs/retros/cycle-0.md). Cycle 1 (foundation: adapters + translation memory + validators) is shaped and is the next bet. Cycle 2 (provider abstraction + Gradle plugin) is shaped and queued behind it. See [`specs/ROADMAP.md`](specs/ROADMAP.md) for the full plan and [`specs/pitches/`](specs/pitches/) for individual cycles.
+> **Status**: pre-release. Cycle 0 (rebrand & stabilize) **shipped** 2026-05-03 — see the [retrospective](specs/retros/cycle-0.md). Cycle 1 (foundation: adapters + translation memory + validators) **shipped** — four bundle adapters, SQLite TM with embedding-based fuzzy lookup, four validators, end-to-end pipeline, and the `nemo` CLI now ship. Cycle 2 (provider abstraction + Gradle plugin — bringing real-LLM translation online via daemon-mode IPC) is shaped and queued. See [`specs/ROADMAP.md`](specs/ROADMAP.md) for the full plan and [`specs/pitches/`](specs/pitches/) for individual cycles.
 
 ## What this is
 
@@ -34,12 +34,32 @@ This installs the package in editable mode plus the dev tooling (`ruff`, `mypy`,
 
 ### CLI
 
-The `nemo` console script is the going-forward CLI entry point. Cycle 0 ships a stub; real subcommands (`translate`, `tm stats`, `validate`) land in cycle 1 — see [`specs/pitches/0001-foundation/pitch.md`](specs/pitches/0001-foundation/pitch.md).
+The `nemo` console script ships three subcommands as of cycle 1.
 
 ```bash
-nemo                              # cycle-0 stub: prints status pointing at cycle 1
-python -m ainemo.cli              # equivalent module-execution form
+# Translate a source bundle to one or more target languages.
+nemo translate \
+  --from messages_en_US.properties \
+  --to-langs de-DE,fr-FR,es-ES \
+  --output-dir ./.ainemo/output \
+  [--format java-properties|i18next-json|gettext-po|xliff-2] \
+  [--tm-path ./.ainemo/tm.sqlite] \
+  [--strict] \
+  [--forbidden-term BrandX]…
+
+# Inspect the local translation memory.
+nemo tm stats --tm-path ./.ainemo/tm.sqlite
+
+# Re-run cycle-1 validators on an existing source/target pair.
+nemo validate \
+  --source messages_en_US.properties \
+  --target messages_de_DE.properties \
+  --to-lang de-DE
 ```
+
+`nemo translate` infers the bundle format from the source path's extension; pass `--format` to override. See [`docs/adapters.md`](docs/adapters.md) for the format → adapter table and per-format limitations.
+
+> **Cycle-1 caveat**: the CLI ships with a `_NoOpProvider` that returns source text unchanged. The full pipeline runs end-to-end (parse → TM → validators → serialize) on real files and surfaces TM cache hits on second runs, but real-LLM translation against NLLB/OpenAI/Anthropic/Ollama lands in cycle 2 with the provider router and `nemo daemon`. Use cycle 1 to validate the plumbing on your bundles; wait for cycle 2 to translate against a live model.
 
 ### Flask app (admin / reviewer surface)
 
@@ -103,7 +123,7 @@ Cycle 1 expands format coverage (i18next JSON, gettext `.po`, XLIFF 2.0) on top 
 | **OPUS / Marian** | Local (Helsinki-NLP) | Strong on European languages; weaker on Thai, Turkish, etc. |
 | **OpenAI** | Managed | Calls `https://api.openai.com/v1/chat/completions`. Set `OPENAI_API_KEY` in the environment. |
 
-Cycle 2 introduces a `Provider` abstraction with cost + latency tracking and adds Anthropic Claude and Ollama backends.
+Cycle 1's `Provider` Protocol is the minimum surface (`translate(segment, target_lang) -> str`) — concrete backends still go through the legacy `TranslatorModel` ABC alongside it. Cycle 2 finalizes the Protocol with cost + latency tracking, retry + backoff, and a `ProviderRouter` that records every call to `~/.ainemo/usage.jsonl`. Anthropic Claude and Ollama backends land in cycle 2 as well.
 
 ## Development
 
@@ -114,23 +134,30 @@ mypy src/ainemo
 pytest --cov
 ```
 
-### Project layout (post-cycle-0)
+### Project layout (post-cycle-1)
 
 ```
 src/ainemo/
-├── core/          # cycle-1 — Segment, Pipeline, ICU, adapters, TM, validators
-├── providers/     # LLM backends (nllb, opus, openai; cycle 2 adds anthropic, ollama)
-├── cli/           # `nemo` CLI (stub in cycle 0; subcommands in cycle 1)
-├── app/           # Flask reviewer + admin (cycle 5 expands)
-├── config/        # configuration loaders, persona templates
-├── utils/         # git inspection, logging setup
-└── _legacy/       # pre-cycle-0 data modules — DELETED at end of cycle 1
+├── core/
+│   ├── segment.py          # Segment, Placeholder, TranslatedSegment
+│   ├── icu.py              # ICU MessageFormat parser
+│   ├── adapters/           # JavaProperties, I18NextJson, GettextPo, Xliff
+│   ├── tm/                 # SqliteTranslationMemory + base Protocol
+│   ├── validators/         # placeholder, ICU, length, forbidden
+│   └── pipeline.py         # TranslationPipeline orchestrator
+├── providers/              # cycle-1 Provider Protocol + legacy ABC; cycle 2 adds router + Anthropic + Ollama
+├── cli/                    # `nemo` translate / tm / validate subcommands
+├── app/                    # Flask reviewer + admin (cycle 5 expands)
+├── config/                 # configuration loaders, persona templates
+├── utils/                  # git inspection, logging setup
+└── _legacy/                # pre-cycle-0 data modules — DELETED in cycle 2 cooldown
 tests/
-├── unit/          # fast, isolated
-├── integration/   # real subsystems (cycle 1+)
-└── e2e/           # full pipeline (cycle 1+)
-specs/             # SDD + Shape-Up artifacts (pitches, ROADMAP, ADRs)
-scratch/           # experimental scripts kept for reference; not run by pytest
+├── unit/                   # fast, isolated (~210 cases as of cycle 1)
+├── e2e/                    # full pipeline against real bundle fixtures
+└── benchmarks/             # opt-in TM throughput benchmarks (`pytest -m benchmark`)
+docs/                       # adapter, TM, validator references
+specs/                      # SDD + Shape-Up artifacts (pitches, ROADMAP, retros, ADRs)
+scratch/                    # experimental scripts kept for reference; not run by pytest
 ```
 
 ## Spec-Driven Shape-Up
@@ -140,8 +167,8 @@ Development cadence is documented in [`specs/README.md`](specs/README.md). Each 
 | Cycle | Pitch | Status |
 |---|---|---|
 | 0 | [Rebrand & Stabilize](specs/pitches/0000-rebrand-stabilize/pitch.md) | shipped — see [retro](specs/retros/cycle-0.md) |
-| 1 | [Foundation: Adapters + TM + Validators](specs/pitches/0001-foundation/pitch.md) | shaped (next bet) |
-| 2 | [Provider Abstraction + Gradle Plugin](specs/pitches/0002-providers-gradle/pitch.md) | shaped |
+| 1 | [Foundation: Adapters + TM + Validators](specs/pitches/0001-foundation/pitch.md) | shipped — adapters + TM + validators + pipeline + CLI all in `src/ainemo/core/` |
+| 2 | [Provider Abstraction + Gradle Plugin](specs/pitches/0002-providers-gradle/pitch.md) | shaped (next bet) |
 
 Future cycles (Kuzu termbase, domain packs, reviewer UI, multi-platform expansion) are sketched in [`specs/ROADMAP.md`](specs/ROADMAP.md) but re-shaped before each betting table.
 
@@ -159,4 +186,4 @@ The pre-cycle-0 prototype documented these CLI entry points. They were renamed d
 | `python -m cli.resource_bundle_git --repo_path ... --model_name nllb --to_lang iw` | `python -m ainemo.cli.resource_bundle_git --repo_path ... --model_name nllb --to_lang iw` |
 | `python -m app.translator_app` | `python -m ainemo.app.translator_app` |
 
-Cycle 1 replaces both legacy CLIs with `nemo translate` subcommands and removes the deprecation shims (`languages.py`, `translation.py`, `translation_request.py`, `translation_service.py`) at the repository root.
+Cycle 1 ships `nemo translate` as the going-forward CLI (see § Usage). The legacy `python -m ainemo.cli.resource_bundle_*` invocations still work for backward compat through cycle 2; the cycle-0 deprecation shims at the repository root (`languages.py`, `translation.py`, `translation_request.py`, `translation_service.py`) delete during cycle 2's cooldown when the provider router migration is done.

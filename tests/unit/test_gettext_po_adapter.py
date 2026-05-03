@@ -143,6 +143,58 @@ def test_parse_skips_obsolete_entries(tmp_path: Path) -> None:
 # --- Plural entries --------------------------------------------------------
 
 
+def test_serialize_passes_through_n_form_plurals(tmp_path: Path) -> None:
+    """Cycle-1 contract pin: ``_plural_entry_from_translated`` writes
+    *every* form-index supplied in the TranslatedSegment list. Cycle 1
+    only ever supplies forms 0 and 1 (gettext source has only msgid +
+    msgid_plural), but a future N-form-aware caller passing forms
+    2..N must get them written verbatim. Otherwise cycle 3+ will need
+    to revisit the serialize logic *and* the test contract together,
+    instead of just adding the caller-side N-form generation."""
+    src = tmp_path / "messages.po"
+    _write_po(
+        src,
+        'msgid "{count} item"\nmsgid_plural "{count} items"\nmsgstr[0] ""\nmsgstr[1] ""\n',
+    )
+
+    adapter = GettextPoAdapter()
+    parsed = adapter.parse(src, _LANG_EN_US)
+
+    # Synthesize a 4-form Russian-style translation: forms 0..3.
+    # Form 0/1 come from the parsed source segments; forms 2/3 are
+    # injected as if a future cycle-3+ provider produced them.
+    extra_form_2 = TranslatedSegment(
+        segment=Segment(
+            key=parsed[0].key.replace("#0", "#2"),
+            source_text=parsed[0].source_text,
+            source_lang=parsed[0].source_lang,
+            placeholders=parsed[0].placeholders,
+            metadata={
+                **parsed[0].metadata,
+                "po.plural_form_index": "2",
+            },
+        ),
+        target_lang="ru-RU",
+        target_text="{count} элементов",  # Russian "many"
+        provider=_PROVIDER_TEST,
+        confidence=None,
+        source=TRANSLATION_SOURCE_PROVIDER,
+    )
+    translated = (
+        _ts(parsed[0], "{count} элемент", target_lang="ru-RU"),
+        _ts(parsed[1], "{count} элемента", target_lang="ru-RU"),
+        extra_form_2,
+    )
+    out = tmp_path / "messages.ru.po"
+    adapter.serialize(out, translated, "ru-RU")
+
+    written = polib.pofile(str(out))
+    plural_entry = written[0]
+    assert plural_entry.msgstr_plural[0] == "{count} элемент"
+    assert plural_entry.msgstr_plural[1] == "{count} элемента"
+    assert plural_entry.msgstr_plural[2] == "{count} элементов"
+
+
 def test_parse_plural_entry_yields_two_segments(tmp_path: Path) -> None:
     src = tmp_path / "messages.po"
     _write_po(

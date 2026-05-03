@@ -37,17 +37,29 @@ Cycle-1 mapping:
 - ``<file id>`` and ``<group id>`` are preserved on metadata so the
   unit hierarchy round-trips.
 - Inline markup (``<mrk>``, ``<ph>``, ``<sc>``, ``<ec>``) inside
-  ``<source>`` is preserved verbatim as text — cycle-1 design choice:
-  treat inline markup like placeholders (the placeholder parser
-  flags them as raw text since they're not curly-brace shapes).
-  Cycle-3+ termbase work may revisit if XLIFF inline markup needs
-  first-class support.
+  ``<source>`` is **NOT supported in cycle 1**. The cycle-1 parser
+  collects only the text content of ``<source>``/``<target>``
+  elements; any inline child tags are dropped on parse with a
+  ``DEBUG``-level log entry naming the affected unit. Files that
+  rely on inline codes for placeholder/format preservation (CAT
+  tools exporting from translation memories, formatted-string
+  segments) lose that markup through the cycle-1 round-trip.
+
+  Why drop instead of preserve? An earlier cycle-1 attempt
+  serialized inline children as XML strings into Segment.source_text;
+  on serialize, lxml's ``Element.text = ...`` escapes those strings,
+  emitting ``&lt;ph id="x"/&gt;`` instead of ``<ph id="x"/>``. That
+  is silently broken XLIFF — worse than dropping the markup
+  outright. Cycle 2+ rebuilds inline children as real XML nodes on
+  serialize and adds a placeholder shape to the cycle-1 ICU parser
+  for them.
 
 Backed by ``lxml`` (added to dependencies in this commit's predecessor).
 """
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import ClassVar
 
@@ -55,6 +67,8 @@ from lxml import etree
 
 from ainemo.core.icu import parse_placeholders
 from ainemo.core.segment import Segment, TranslatedSegment
+
+_logger = logging.getLogger(__name__)
 
 # --- Module constants (no magic strings; AGENTS.md § Prohibited Patterns) ---
 
@@ -255,15 +269,37 @@ def _collect_notes(unit_element: etree._Element) -> dict[str, str]:
 
 
 def _serialize_inline(element: etree._Element) -> str:
-    """Concatenate the element's text with the serialized form of any
-    inline children. Cycle 1: keeps inline markup as XML strings so
-    serialize round-trips it; the placeholder parser sees these as
-    plain text."""
+    """Extract the text content of ``element``, dropping any inline
+    children.
+
+    **Cycle-1 limitation.** XLIFF 2.0 allows inline elements
+    (``<mrk>``, ``<ph>``, ``<sc>``, ``<ec>``) inside ``<source>`` and
+    ``<target>``. Cycle 1 does not preserve those — the parser keeps
+    only the element's surrounding text. An earlier cycle-1 design
+    serialized inline children as XML strings (e.g.
+    ``'Hello <ph id="x"/>'``) into ``Segment.source_text``; on
+    serialize, ``Element.text = ...`` would escape those strings into
+    ``&lt;ph id="x"/&gt;``, emitting silently broken XLIFF. Dropping
+    is the cycle-1-honest choice. Cycle 2+ rebuilds inline children
+    as real XML nodes on serialize and exposes them through a new
+    ``Placeholder.kind`` value to the parser.
+
+    Files that rely on inline codes lose that information through the
+    cycle-1 round-trip; the ``DEBUG`` log line below names every
+    affected element so users can audit.
+    """
     parts: list[str] = []
     if element.text:
         parts.append(element.text)
     for child in element:
-        parts.append(etree.tostring(child, encoding="unicode", with_tail=False))
+        # Inline children are dropped (see docstring); their tail text
+        # — the text immediately after the closing tag, before the
+        # next child or end of parent — is preserved.
+        _logger.debug(
+            "XLIFF inline element %s dropped from %s (cycle-1 limitation)",
+            etree.QName(child).localname,
+            etree.QName(element).localname,
+        )
         if child.tail:
             parts.append(child.tail)
     return "".join(parts)
