@@ -85,7 +85,7 @@ class Provider(Protocol):
 @dataclass(frozen=True)
 class ProviderResult:
     target_text: str
-    model: str                                    # e.g. "claude-sonnet-4-7", "gpt-4o", "nllb-200-distilled-600M"
+    model: str                                    # whatever string the provider's API accepts as a model id; e.g. NLLB's "nllb-200-distilled-600M", a dated Anthropic ID like "claude-sonnet-4-20250514", an OpenAI ID like "gpt-4o-2024-11-20", or whatever Ollama tag is locally pulled.
     input_tokens: int | None                      # None for non-LLM providers (NLLB/OPUS — token counts irrelevant)
     output_tokens: int | None
     latency_ms: int
@@ -168,7 +168,7 @@ Single source of truth for exponential-backoff retry across providers. Per-provi
 | `providers/anthropic/anthropic_provider.py` | `AnthropicProvider` | **NEW.** Anthropic SDK Messages API. `temperature=0`. Uses prompt caching for the system prompt + glossary. |
 | `providers/ollama/ollama_provider.py` | `OllamaProvider` | **NEW.** Local Ollama HTTP client. `temperature=0`. `cost_usd=None`. |
 
-Each provider has a sibling `_client.py` for SDK-client construction (lazy, takes config) and a sibling `_prompts.py` for prompt-template constants (no inline literals). System prompts and glossary-injection templates live as constants per [`feedback_no_magic_strings.md`](../../../../.claude/projects/-Users-gosha-dev-repo-resource-bundle-translator/memory/feedback_no_magic_strings.md).
+Each provider has a sibling `_client.py` for SDK-client construction (lazy, takes config) and a sibling `_prompts.py` for prompt-template constants (no inline literals). System prompts and glossary-injection templates live as constants per the project's *No magic strings/numbers — named constants always* rule (AGENTS.md § Prohibited Patterns).
 
 **`src/ainemo/cli/daemon.py`** (cycle 2's CLI gains a real subcommand)
 
@@ -228,7 +228,7 @@ Plugin Maven coordinates: **`com.egoge.ai.nemo:translate-gradle-plugin`** per AG
 
 ## Scopes
 
-> Estimates are session-execution time, not human-developer-days (per [`feedback_estimate_calibration.md`](../../../../.claude/projects/-Users-gosha-dev-repo-resource-bundle-translator/memory/feedback_estimate_calibration.md)). Total cycle 2 execution is hours, not weeks; the 6-week appetite is wall-clock willingness to wait.
+> Estimates are session-execution time, not human-developer-days (project rule: *Calibrate estimates for Claude Code, not human-days*). Total cycle 2 execution is hours, not weeks; the 6-week appetite is wall-clock willingness to wait.
 
 **Half A — Provider plumbing (the foundation):**
 
@@ -238,7 +238,7 @@ Plugin Maven coordinates: **`com.egoge.ai.nemo:translate-gradle-plugin`** per AG
 4. **`ProviderRouter` (`providers/router.py`)** — config-driven routing, default provider, per-rule precedence. Records every call to UsageLog. Unit tests cover precedence, fallback to default, rate-limit retry path. Routing config schema in `providers/config/routes.yaml`.
 5. **Migrate existing providers to the Protocol**: NLLB, OPUS, OpenAI. Each gets a sibling `_client.py` (lazy SDK-client construction) and `_prompts.py` (prompt-template constants). Delete the legacy `TranslatorModel` ABC. Delete `_legacy/` data modules + the 4 top-level shims (cycle-0 carryover). Update CLI to call the router. Existing cycle-1 integration tests should keep passing.
 6. **Add `AnthropicProvider`** — `providers/anthropic/`. Uses Anthropic SDK; prompt caching for system prompt + glossary; `temperature=0`. Unit tests (mocked SDK) + integration test gated on `ANTHROPIC_API_KEY`.
-7. **Add `OllamaProvider`** — `providers/ollama/`. Local HTTP client; `temperature=0`; default model constant (e.g. `OLLAMA_DEFAULT_MODEL = "llama3.2"`). Unit tests + integration test gated on a running Ollama daemon.
+7. **Add `OllamaProvider`** — `providers/ollama/`. Local HTTP client; `temperature=0`; default model id is a /bet-time decision (open question 6), held in `providers/ollama/_models.py` as a named constant — never inlined. Unit tests + integration test gated on a running Ollama daemon.
 8. **`nemo provider` CLI subcommand** — `nemo provider list` (registered providers + their availability), `nemo provider stats [--since DATE]` (UsageLog summary). Argparse-based; idiomatic `--help`.
 
 **Half B — Gradle plugin:**
@@ -292,19 +292,18 @@ Slack budget: 2–3 scope-equivalents for IPC bug-hunting (the daemon is the mos
 
 ## Open questions
 
-These are pre-resolved from AGENTS.md / ROADMAP / cycle-0 conventions per [`feedback_pre_resolve_from_docs.md`](../../../../.claude/projects/-Users-gosha-dev-repo-resource-bundle-translator/memory/feedback_pre_resolve_from_docs.md). Recorded here for /bet-time confirmation.
+These are pre-resolved from AGENTS.md / ROADMAP / cycle-0 conventions per the project's *Pre-resolve "open questions" from project docs before asking the user* rule. Recorded here for /bet-time confirmation.
 
 1. **Plugin Maven coordinates** → `com.egoge.ai.nemo:translate-gradle-plugin`, plugin id `com.egoge.ai.nemo.translate`. Per AGENTS.md § Reference. Confirmed unless user specifies otherwise.
 2. **Daemon IPC protocol versioning** → semver in the JSON envelope (`{"v": "1", ...}`). Concrete-in-code, evolves additively. Pure pinned-hash versioning is too rigid for an IPC surface that ships with the package.
 3. **Caching layer placement** → at the **router** (above providers), keyed by `(segment.fingerprint, target_lang, persona, model_id)`. Misses fall through to the chosen provider. Per AGENTS.md § Translation Memory Rules ("TM is the first stop, not the last"). Cycle-1 TM and cycle-2 router cache are the **same** SQLite table — the router checks before invoking the provider.
-4. **Anthropic default model** → `claude-sonnet-4-7` (current Claude default at cycle-2 shaping time, 2026-05-03). Cycle 4+ revisits as new versions ship. Configured in `providers/anthropic/_models.py` constants, not hardcoded inline.
-5. **OpenAI default model** → keep `gpt-4o` (legacy default was `gpt-3.5-turbo`; cycle 0 left that string as legacy magic; cycle 2 promotes `gpt-4o` to a constant). Configured in `providers/openai/_models.py`.
-6. **Ollama default model** → `llama3.2`. Local-first users can override via `routes.yaml`.
-7. **Plugin Portal publish automation** → manual at cycle close. CI verification stops at "build + test + publishPlugins dry-run." Actual publish needs the user's portal credentials and is a deliberate human gate.
+4. **Anthropic / OpenAI default model IDs** → **/bet-time decision, not pre-resolved.** Model IDs are dated (Anthropic uses `claude-<line>-<version>-YYYYMMDD`; OpenAI uses dated suffixes too) and shift between shaping and build. The build-time team picks a current-at-build dated ID by consulting the official model-list APIs (Anthropic: `https://docs.claude.com/en/api/models-list`; OpenAI: `https://platform.openai.com/docs/models`). The pitch fixes the **format constraint** — module-level constants in `providers/anthropic/_models.py` and `providers/openai/_models.py`, dated IDs, never inlined — but leaves the specific value to /bet so the cycle ships with current models.
+5. **Ollama default model** → **/bet-time decision.** Ollama tags vary by what the user has locally pulled; pick a sensible default at build time (e.g. a current `llama` or `qwen` tag) and document override via `routes.yaml`. Constant lives in `providers/ollama/_models.py`.
+6. **Plugin Portal publish automation** → manual at cycle close. CI verification stops at "build + test + publishPlugins dry-run." Actual publish needs the user's portal credentials and is a deliberate human gate.
 
 Genuinely contested at /bet (surface for the user):
 
-8. **Provider routing strategy when no rule matches and no creds for the configured default** → fail fast (raise) vs fall back to NLLB local. **Recommendation: fail fast.** Silent fallback to a different model class (NMT vs LLM) breaks reproducibility and surprises users at translation-quality time. User can override via `--provider` CLI flag if they need an explicit fallback.
+7. **Provider routing strategy when no rule matches and no creds for the configured default** → fail fast (raise) vs fall back to NLLB local. **Recommendation: fail fast.** Silent fallback to a different model class (NMT vs LLM) breaks reproducibility and surprises users at translation-quality time. User can override via `--provider` CLI flag if they need an explicit fallback.
 
 After /bet, no new questions allowed. Anything that surfaces during build goes to the cycle-3 cooldown shaping queue.
 
@@ -333,4 +332,4 @@ After the user's `/bet 0002-providers-gradle`, `/cycle-start` initializes `specs
 
 ## Build branch convention
 
-`cycle-2/providers-gradle` off the post-cycle-1 main. Build phase is one branch, one PR (per [`feedback_fold_pitch_into_build_pr.md`](../../../../.claude/projects/-Users-gosha-dev-repo-resource-bundle-translator/memory/feedback_fold_pitch_into_build_pr.md)). PR title: "cycle-2: provider abstraction + Gradle plugin".
+`cycle-2/providers-gradle` off the post-cycle-1 main. Build phase is one branch, one PR (project rule: *Fold the pitch into the cycle's build PR — no separate planning PRs*). PR title: "cycle-2: provider abstraction + Gradle plugin".

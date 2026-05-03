@@ -48,13 +48,13 @@ PR #1 (the SDD/Shape-Up roadmap that preceded this cycle) shipped earlier the sa
 
 ## What was rough
 
-- **Estimates were wildly off — 10–20× too high.** The pitch quoted 0.5–3 days per scope; actual session-execution time was minutes per scope. Calibration is now a durable feedback memory ([`feedback_estimate_calibration.md`](../../../.claude/projects/-Users-gosha-dev-repo-resource-bundle-translator/memory/feedback_estimate_calibration.md)). Filed upstream as `code-copilot-team#24`.
-- **Magic-strings / SOLID rules were missed on first pass and applied retroactively.** AGENTS.md § Prohibited Patterns explicitly prohibits raw string literals for named things. The cycle-0 build still landed `"ainemo.config"`, `"translation_config.json"`, four duplicated deprecation-warning blocks, and inline JSON keys in `ConfigLoader`. The user flagged it sharply (`UNEXCEPTEBLE !!!`) and we patched in `fae26be`. Two new memory files now lock both rules: [`feedback_no_magic_strings.md`](../../../.claude/projects/-Users-gosha-dev-repo-resource-bundle-translator/memory/feedback_no_magic_strings.md), [`feedback_solid_modularization.md`](../../../.claude/projects/-Users-gosha-dev-repo-resource-bundle-translator/memory/feedback_solid_modularization.md).
+- **Estimates were wildly off — 10–20× too high.** The pitch quoted 0.5–3 days per scope; actual session-execution time was minutes per scope. Calibration is now a durable agent-memory rule (private to the Claude Code session — name: *Calibrate estimates for Claude Code, not human-days*). Filed upstream as `code-copilot-team#24`.
+- **Magic-strings / SOLID rules were missed on first pass and applied retroactively.** AGENTS.md § Prohibited Patterns explicitly prohibits raw string literals for named things. The cycle-0 build still landed `"ainemo.config"`, `"translation_config.json"`, four duplicated deprecation-warning blocks, and inline JSON keys in `ConfigLoader`. The user flagged it sharply and we patched in `fae26be`. Two new agent-memory rules now lock both: *No magic strings/numbers — named constants always* and *SOLID + DRY in new code*.
 - **Lint/format wasn't run locally before commit.** `uv` was available in the environment but I didn't invoke `uv run --extra dev ruff check .` until the reviewer pointed at the specific failures. The fix was trivial (`ruff check . --fix && ruff format .`) — what was missing was the *habit* of running it at the boundary, not the tool. Action: when CI scopes lint/format/typecheck/tests, run all four locally before declaring done.
 - **The OpenAI module-level `client = OpenAI()` side effect wasn't caught locally** because `openai` wasn't installed in my local Python. The reviewer ran `uv run --extra dev pytest --collect-only -q` and saw the import-time TypeError. Action: when CI installs deps via `pip install -e ".[dev]"`, the local equivalent (`uv run --extra dev ...` or `pip install -e .[dev]`) is the right pre-commit gate.
 - **The `OK`/`JOKEY` substring assertion shipped because the assertion logic wasn't traced through.** `"OK" not in out.replace("_OK", "")` is True only if the remaining string has no other `OK` substring; `JOKEY` contains `OK`. The fix (direct equality on the full output) is more readable too. Action: when writing negative-substring assertions, manually evaluate the assertion against the test fixture in your head before shipping.
-- **The pre-resolved-from-docs rule was missed during shaping.** Cycle 0's pitch surfaced 4 "open questions" that were already answered in CLAUDE.md / AGENTS.md / specs/ROADMAP.md. The user redirected with "if it's in CLAUDE.md, it's not an open question" — now in [`feedback_pre_resolve_from_docs.md`](../../../.claude/projects/-Users-gosha-dev-repo-resource-bundle-translator/memory/feedback_pre_resolve_from_docs.md).
-- **Folding the pitch into the build PR wasn't the initial instinct.** Originally proposed PR-the-pitch-first; user redirected to fold pitch + build into one PR. Now in [`feedback_fold_pitch_into_build_pr.md`](../../../.claude/projects/-Users-gosha-dev-repo-resource-bundle-translator/memory/feedback_fold_pitch_into_build_pr.md).
+- **The pre-resolved-from-docs rule was missed during shaping.** Cycle 0's pitch surfaced 4 "open questions" that were already answered in CLAUDE.md / AGENTS.md / specs/ROADMAP.md. The user redirected with "if it's in CLAUDE.md, it's not an open question" — now an agent-memory rule: *Pre-resolve "open questions" from project docs before asking the user*.
+- **Folding the pitch into the build PR wasn't the initial instinct.** Originally proposed PR-the-pitch-first; user redirected to fold pitch + build into one PR. Now an agent-memory rule: *Fold the pitch into the cycle's build PR — no separate planning PRs*.
 
 ## Scope-hammering / scope drift
 
@@ -83,15 +83,15 @@ No revisit during build.
 
 ## Programmatic / automation lessons
 
-Five durable feedback rules entered the project memory system this cycle:
+Five durable agent-memory rules were captured during this cycle. They live in the Claude Code session's private memory (outside the repo, so no in-repo link is meaningful) and apply to all future agent sessions on this project:
 
-1. [`feedback_estimate_calibration.md`](../../../.claude/projects/-Users-gosha-dev-repo-resource-bundle-translator/memory/feedback_estimate_calibration.md) — estimates in session-execution time, not human-days.
-2. [`feedback_pre_resolve_from_docs.md`](../../../.claude/projects/-Users-gosha-dev-repo-resource-bundle-translator/memory/feedback_pre_resolve_from_docs.md) — read CLAUDE.md/AGENTS.md/ROADMAP before surfacing questions.
-3. [`feedback_fold_pitch_into_build_pr.md`](../../../.claude/projects/-Users-gosha-dev-repo-resource-bundle-translator/memory/feedback_fold_pitch_into_build_pr.md) — Shape-Up cycles are one branch, one PR for pitch + build.
-4. [`feedback_no_magic_strings.md`](../../../.claude/projects/-Users-gosha-dev-repo-resource-bundle-translator/memory/feedback_no_magic_strings.md) — every named literal is a module-level constant, no exceptions.
-5. [`feedback_solid_modularization.md`](../../../.claude/projects/-Users-gosha-dev-repo-resource-bundle-translator/memory/feedback_solid_modularization.md) — small focused classes; factor duplicated blocks across near-identical files.
+1. **Calibrate estimates for Claude Code, not human-days** — pitch scopes in hours of session execution; the appetite is wall-clock willingness to wait, not work content.
+2. **Pre-resolve "open questions" from project docs before asking the user** — search CLAUDE.md / AGENTS.md / specs/ROADMAP.md for the answer first; only surface as open questions when the docs are silent or conflict.
+3. **Fold the pitch into the cycle's build PR — no separate planning PRs** — Shape-Up cycles are one branch, one PR for pitch + build.
+4. **No magic strings/numbers — named constants always** — every named literal becomes a module-level constant, no exceptions even for one-time use.
+5. **SOLID + DRY in new code** — small focused classes; factor duplicated blocks across near-identical files into a helper.
 
-[`MEMORY.md`](../../../.claude/projects/-Users-gosha-dev-repo-resource-bundle-translator/memory/MEMORY.md) indexes them.
+These rules become non-negotiable for cycle 1 onward. Reviewers should hold work to them.
 
 ## Metrics
 
