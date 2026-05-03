@@ -33,13 +33,13 @@ The defensible product is the **intersection of all four**, plus a CC0/CC-BY-onl
 
 ## Cycle plan
 
-Each cycle below is a single Shape-Up bet. Cycles 0 is shipped; 1 and 2 are shaped (cycle 1 is the natural next bet); 3 onward is provisional and will be re-shaped before betting.
+Each cycle below is a single Shape-Up bet. Cycles 0 and 1 are shipped; 2 is shaped and the next bet; 3 onward is provisional and will be re-shaped before betting.
 
 | # | Title | Appetite | Status | Goal in one line |
 |---|---|---|---|---|
 | 0 | Rebrand & Stabilize | 2w | **shipped** (PR #2 merged 2026-05-03; retro: [`retros/cycle-0.md`](retros/cycle-0.md)) | Became AI-NEMO, fixed audit bugs, set up green CI matrix. |
-| 1 | Foundation: Adapters + TM + Validators | 6w | shaped | Multi-format bundles, SQLite TM with fuzzy match, ICU-aware validators. |
-| 2 | Provider Abstraction + Gradle Plugin | 6w | **shaped** | Pluggable LLM providers (Anthropic + Ollama added) + first Gradle plugin for JVM `.properties`. |
+| 1 | Foundation: Adapters + TM + Validators | 6w | **shipped** (216 tests; CLI ships with `_NoOpProvider` until cycle 2 wires the router) | Four bundle adapters, SQLite TM with embedding fuzzy match, four validators, end-to-end pipeline, `nemo` CLI. |
+| 2 | Provider Abstraction + Gradle Plugin | 6w | **shaped (next bet)** | Pluggable LLM providers (Anthropic + Ollama added) + first Gradle plugin for JVM `.properties`. |
 | 3 | Concept-Oriented Termbase via Kuzu | 6w | stub | Migrate flat termbase to Kuzu, TBX 3.0 I/O, persona system. |
 | 4 | First Domain Pack: legal-en | 6w | stub | Pack format spec, IATE+EuroVoc-derived legal-en pack, Wikidata anchors. |
 | 5 | Reviewer Web UI + QA Layer | 6w | stub | Auto-promotion review queue, confidence scoring, back-translation QA. |
@@ -56,13 +56,18 @@ All 7 scopes landed inside the 2-week appetite (actual session execution: hours)
 
 **Outstanding action carried forward**: GitHub-side repo rename `resource-bundle-translator` → `ai-nemo` (deferred per pitch open question 4 — pair with the first AI-NEMO release tag).
 
-## Cycle 1 — Foundation: Adapters + TM + Validators (6 weeks)
+## Cycle 1 — Foundation: Adapters + TM + Validators (shipped)
 
-**Pitch**: [pitches/0001-foundation/pitch.md](pitches/0001-foundation/pitch.md) — fully shaped, ready for betting.
+**Pitch**: [pitches/0001-foundation/pitch.md](pitches/0001-foundation/pitch.md) — status `shipped`.
 
-**Outcome**: AI-NEMO can translate four bundle formats (`.properties`, i18next JSON, gettext `.po`, XLIFF 2.0), preserves ICU MessageFormat correctly, caches results in a SQLite-backed translation memory with fuzzy match, and validates every output against placeholder/ICU/length rules.
+All 12 scopes landed: Segment + ICU parser, BundleAdapter Protocol with four concrete adapters (Java properties, i18next JSON, gettext PO, XLIFF 2.0), SqliteTranslationMemory with exact + embedding-based fuzzy lookup, four validators (placeholder parity, ICU syntax, length budget, forbidden terms), TranslationPipeline orchestrator, `nemo` CLI (translate / tm stats / validate), e2e tests, benchmark harness, and per-component docs.
 
-**Why this is cycle 1**: every later capability (Gradle plugin, KG termbase, domain packs) builds on the bundle adapter interface and the TM. Get the contracts right here or pay forever.
+**Cycle-1 limitations carried forward** (intentional scope-hammers, see the pitch's Outcomes section for the rationale and pin tests):
+- Gettext plural output is 2-form-only; languages with more plural categories (Russian/Polish/Arabic/Czech) need cycle 3+ for full N-form output. Serializer already passes through forms 2..N when supplied.
+- XLIFF inline markup (`<mrk>`, `<ph>`, `<sc>`, `<ec>`) is dropped on parse — preserving it as XML strings produces silently-broken serialize output. Cycle 2+ rebuilds inline children as real XML nodes.
+- The `nemo translate` CLI ships with a `_NoOpProvider` (returns source text unchanged). Real-LLM translation lands in cycle 2 with the provider router and `nemo daemon`.
+
+**Why this was cycle 1**: every later capability (Gradle plugin, KG termbase, domain packs) builds on the bundle adapter interface and the TM. The contracts shipped here are the foundation everything else lands on.
 
 ## Cycle 2 — Provider Abstraction + Gradle Plugin (6 weeks)
 
