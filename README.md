@@ -2,7 +2,7 @@
 
 **Networked Engine for Multilingual Ontologies** — knowledge-graph-grounded terminology and localization for software, with versioned domain packs and CC0/CC-BY ontology integrations. Distributed under the **egoge.com** namespace alongside [AI-ATLAS](https://github.com/gosha70/ai-atlas).
 
-> **Status**: pre-release. Cycle 0 (rebrand & stabilize) is landing; cycle 1 (foundation: adapters + translation memory + validators) is shaped. See [`specs/ROADMAP.md`](specs/ROADMAP.md) for the full plan and [`specs/pitches/`](specs/pitches/) for individual cycles.
+> **Status**: pre-release. Cycle 0 (rebrand & stabilize) **shipped** 2026-05-03 — see the [retrospective](specs/retros/cycle-0.md). Cycle 1 (foundation: adapters + translation memory + validators) is shaped and is the next bet. Cycle 2 (provider abstraction + Gradle plugin) is shaped and queued behind it. See [`specs/ROADMAP.md`](specs/ROADMAP.md) for the full plan and [`specs/pitches/`](specs/pitches/) for individual cycles.
 
 ## What this is
 
@@ -139,10 +139,11 @@ Development cadence is documented in [`specs/README.md`](specs/README.md). Each 
 
 | Cycle | Pitch | Status |
 |---|---|---|
-| 0 | [Rebrand & Stabilize](specs/pitches/0000-rebrand-stabilize/pitch.md) | building |
-| 1 | [Foundation: Adapters + TM + Validators](specs/pitches/0001-foundation/pitch.md) | shaped |
+| 0 | [Rebrand & Stabilize](specs/pitches/0000-rebrand-stabilize/pitch.md) | shipped — see [retro](specs/retros/cycle-0.md) |
+| 1 | [Foundation: Adapters + TM + Validators](specs/pitches/0001-foundation/pitch.md) | shaped (next bet) |
+| 2 | [Provider Abstraction + Gradle Plugin](specs/pitches/0002-providers-gradle/pitch.md) | shaped |
 
-Future cycles (provider abstraction + Gradle plugin, Kuzu termbase, domain packs, reviewer UI, multi-platform expansion) are sketched in [`specs/ROADMAP.md`](specs/ROADMAP.md) but re-shaped before each betting table.
+Future cycles (Kuzu termbase, domain packs, reviewer UI, multi-platform expansion) are sketched in [`specs/ROADMAP.md`](specs/ROADMAP.md) but re-shaped before each betting table.
 
 ## License
 

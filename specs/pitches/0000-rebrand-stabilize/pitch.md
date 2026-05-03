@@ -2,8 +2,9 @@
 
 - **ID**: 0000
 - **Appetite**: 2w (wall-clock ceiling; actual execution ≪ appetite)
-- **Status**: building
+- **Status**: shipped
 - **Owner**: gosha70
+- **Shipped**: 2026-05-03 via PR #2 (merge commit `a563dd5`). Retrospective: [`specs/retros/cycle-0.md`](../../retros/cycle-0.md).
 
 ## Problem
 
@@ -105,3 +106,22 @@ Resolved at `/bet` time — recorded here so the build phase has a single source
 4. **GitHub repo rename timing** → **after cycle 0 ships**, paired with the first AI-NEMO-branded release tag.
 
 No new questions allowed during build. Anything that surfaces goes to the cooldown shaping queue.
+
+## Outcomes
+
+Shipped 2026-05-03 via PR #2 (merge commit `a563dd5`). All 7 scopes landed; no scope was hammered or shelved. Two iterative review passes (5 P1s combined) caught real bugs before merge — see [`specs/retros/cycle-0.md`](../../retros/cycle-0.md) for the full retrospective.
+
+**Headline deliverables:**
+- Repo identity: package name `ai-nemo`, import name `ainemo`, console script `nemo`, layout under `src/ainemo/{core,providers,cli,app,config,utils,_legacy}/` and `tests/{unit,integration,e2e}/`.
+- Build: `pyproject.toml` (Hatchling, PEP 621, Python ≥3.10) replacing `requirements.txt`. `[project.optional-dependencies] dev` carries ruff + mypy + pytest + pytest-cov.
+- CI: `.github/workflows/python.yml` runs `ruff check` + `ruff format --check` + `mypy --strict src/ainemo` + `pytest --cov` on Python 3.10/3.11/3.12. All green on `fae26be`.
+- Audit-bug fixes: `translationss` → `translations` typo; duplicate `preserve_glossary_words` removed (kept the correct word-boundary version, fixed the `create_placeholder` kwarg drift); `openaipw` → `openai`; README ↔ code port mismatch resolved at 5001; README CLI typo fixed.
+- Logging: every `print()` in `src/ainemo/{app,providers,cli,config,utils}/` replaced with module-level loggers. `_legacy/` left alone (deletes in cycle 1).
+- Deprecation shims: 4 top-level modules (`languages.py`, `translation.py`, `translation_request.py`, `translation_service.py`) re-export from `ainemo._legacy.*` with a `DeprecationWarning` emitted via the shared `emit_legacy_shim_warning()` helper. Shims delete at end of cycle 1.
+- Test surface: 5 new test files, 24 cases, all passing on the matrix. Pins regression contracts for the 5 P1 fixes plus the helper invariant.
+
+**Carried forward to cycle 1:**
+- Delete `src/ainemo/_legacy/` and the 4 top-level shims at end of cycle 1.
+- Remove `[tool.ruff] extend-exclude` and `[tool.mypy.overrides] ignore_errors` entries as legacy modules delete.
+- Marian's `create_placeholder(text=...)` vs NLLB's `create_placeholder(index=...)` API drift — cycle 2 unifies via the new `Provider` Protocol.
+- GitHub repo rename `resource-bundle-translator` → `ai-nemo` is still pending; pair with first AI-NEMO release tag (open question 4).
