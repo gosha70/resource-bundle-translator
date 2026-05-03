@@ -16,7 +16,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Literal, Mapping
+from typing import Final, Literal, Mapping
 
 # --- Module constants (no magic strings; AGENTS.md § Prohibited Patterns) ---
 
@@ -33,11 +33,13 @@ _FINGERPRINT_SEPARATOR = "\x00"
 
 # Source-of-translation tags. Recorded on every TranslatedSegment so the
 # pipeline and the reviewer UI can tell exact-cache hits from fuzzy hits
-# from fresh provider calls from manual overrides.
-TRANSLATION_SOURCE_EXACT_TM = "exact_tm"
-TRANSLATION_SOURCE_FUZZY_TM = "fuzzy_tm"
-TRANSLATION_SOURCE_PROVIDER = "provider"
-TRANSLATION_SOURCE_MANUAL = "manual"
+# from fresh provider calls from manual overrides. The `Final` typing
+# narrows each constant to its specific Literal so callers can pass the
+# constants directly to `TranslatedSegment(source=...)` without `cast`.
+TRANSLATION_SOURCE_EXACT_TM: Final = "exact_tm"
+TRANSLATION_SOURCE_FUZZY_TM: Final = "fuzzy_tm"
+TRANSLATION_SOURCE_PROVIDER: Final = "provider"
+TRANSLATION_SOURCE_MANUAL: Final = "manual"
 
 TranslationSource = Literal["exact_tm", "fuzzy_tm", "provider", "manual"]
 
