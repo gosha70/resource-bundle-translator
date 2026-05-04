@@ -24,6 +24,7 @@ from ainemo.core.segment import Segment
 from ainemo.core.tm.sqlite import SqliteTranslationMemory
 from ainemo.core.validators.icu import IcuSyntaxValidator
 from ainemo.core.validators.placeholder import PlaceholderParityValidator
+from ainemo.providers.base import ProviderResult
 
 _LANG_EN_US = "en-US"
 _LANG_DE = "de-DE"
@@ -34,8 +35,15 @@ _CACHE_HIT_RATE_TARGET = 0.99
 class _PrefixingProvider:
     provider_id: ClassVar[str] = "prefixing"
 
-    def translate(self, segment: Segment, target_lang: str) -> str:
-        return f"[{target_lang}] {segment.source_text}"
+    def translate(self, segment: Segment, target_lang: str) -> ProviderResult:
+        return ProviderResult(
+            target_text=f"[{target_lang}] {segment.source_text}",
+            provider=self.provider_id,
+            model="test-prefixing-1.0",
+        )
+
+    def supports(self, source_lang: str, target_lang: str) -> bool:
+        return True
 
 
 def test_e2e_properties_bundle_cache_hit_rate(tmp_path: Path) -> None:

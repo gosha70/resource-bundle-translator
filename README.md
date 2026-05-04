@@ -123,7 +123,7 @@ Cycle 1 expands format coverage (i18next JSON, gettext `.po`, XLIFF 2.0) on top 
 | **OPUS / Marian** | Local (Helsinki-NLP) | Strong on European languages; weaker on Thai, Turkish, etc. |
 | **OpenAI** | Managed | Calls `https://api.openai.com/v1/chat/completions`. Set `OPENAI_API_KEY` in the environment. |
 
-Cycle 1's `Provider` Protocol is the minimum surface (`translate(segment, target_lang) -> str`) — concrete backends still go through the legacy `TranslatorModel` ABC alongside it. Cycle 2 finalizes the Protocol with cost + latency tracking, retry + backoff, and a `ProviderRouter` that records every call to `~/.ainemo/usage.jsonl`. Anthropic Claude and Ollama backends land in cycle 2 as well.
+Cycle 2 finalizes the `Provider` Protocol: every concrete backend implements `translate(segment, target_lang) -> ProviderResult` and `supports(source_lang, target_lang) -> bool`. `ProviderResult` carries `target_text`, `model`, `input_tokens`, `output_tokens`, `latency_ms`, `cost_usd`, and `confidence`. The cycle-1 minimal `translate -> str` surface was a bridge during cycle 1; cycle-2 scope 1 replaced it. Cycle-2 also adds a `ProviderRouter` that records every call to `~/.ainemo/usage.jsonl`, retry + exponential backoff via `with_retry`, and brings Anthropic Claude and Ollama backends online.
 
 ## Development
 

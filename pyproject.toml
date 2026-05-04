@@ -87,7 +87,15 @@ target-version = "py310"
 extend-exclude = [
     "scratch",
     "src/ainemo/_legacy",
-    "src/ainemo/providers",
+    # Cycle-2 added new provider modules (router.py, _usage_log.py,
+    # _retry.py, _ids.py, base.py rewrite) that MUST be linted. The
+    # pre-cycle-2 NLLB/OPUS/OpenAI provider modules are still
+    # excluded individually below until scope 5 rewrites them behind
+    # the new Protocol; cycle-2 cooldown removes those entries too.
+    "src/ainemo/providers/nllb",
+    "src/ainemo/providers/opus",
+    "src/ainemo/providers/openai/open_ai_model.py",
+    "src/ainemo/providers/model_types.py",
     "src/ainemo/app",
     "src/ainemo/config",
     "src/ainemo/utils",

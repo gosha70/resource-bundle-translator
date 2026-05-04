@@ -117,9 +117,17 @@ class Segment:
         return _FINGERPRINT_HASH(preimage.encode("utf-8")).hexdigest()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TranslatedSegment:
-    """A :class:`Segment` plus its translation into one target language."""
+    """A :class:`Segment` plus its translation into one target language.
+
+    All fields are keyword-only (``kw_only=True``). This is intentional:
+    cycle 2 added the ``model`` field, and silently inserting it among
+    the existing fields in any other order would mis-bind positional
+    arguments at every external call site (the reviewer flagged the
+    P2 risk on PR #6). Forcing keyword-only construction means future
+    field additions never silently corrupt existing code.
+    """
 
     segment: Segment
     target_lang: str
@@ -132,12 +140,22 @@ class TranslatedSegment:
     """Provider id that produced this translation (e.g. ``"openai"``,
     ``"nllb"``, ``"manual"``)."""
 
-    confidence: float | None
+    confidence: float | None = None
     """Optional 0..1 confidence score. ``None`` when the provider does
     not expose one."""
 
-    source: TranslationSource
+    source: TranslationSource = TRANSLATION_SOURCE_PROVIDER
     """Where the translation came from — see ``TRANSLATION_SOURCE_*``."""
+
+    model: str = ""
+    """Model id within the provider — e.g. ``"gpt-4o-2024-11-20"`` for
+    ``provider="openai"``, ``"claude-sonnet-4-5-20250929"`` for
+    ``provider="anthropic"``, ``"nllb-200-distilled-600M"`` for
+    ``provider="nllb"``. Cycle-2 introduced this so the TM keys on
+    ``(fingerprint, target_lang, provider, model)`` — two models behind
+    one provider id no longer overwrite each other's cached
+    translations. Empty string for cycle-1-era TM rows or when the
+    provider does not expose a model id (e.g. legacy ``manual`` source)."""
 
 
 __all__ = [

@@ -76,9 +76,18 @@ DEFAULT_TM_PATH: Final = Path(".ainemo") / "tm.sqlite"
 # float16 saves disk but is fine cycle-2+ work if size matters.
 _EMBEDDING_DTYPE = np.float32
 
-# Schema version, written into a `meta` table. If we change the
-# schema, this gets bumped and a migration runs.
-_SCHEMA_VERSION = 1
+# Schema version, written into the `meta` table. Bumped when the
+# schema changes; the constructor runs a migration on open if the
+# stored version is older.
+#
+# Cycle-1 (v1): translations PK = (fingerprint, target_lang, provider).
+# Cycle-2 (v2): adds `model` column; PK = (fingerprint, target_lang,
+#               provider, model) so two models behind one provider id
+#               cache independently. Migration: drops translations
+#               table and recreates — pre-1.0 cycle 1 just shipped, so
+#               the data loss is acceptable; documented in the cycle-2
+#               retro.
+_SCHEMA_VERSION = 2
 
 _DDL_META = "CREATE TABLE IF NOT EXISTS meta (  key TEXT PRIMARY KEY,  value TEXT NOT NULL)"
 _DDL_SEGMENTS = (
@@ -97,10 +106,11 @@ _DDL_TRANSLATIONS = (
     "  target_lang TEXT NOT NULL,"
     "  target_text TEXT NOT NULL,"
     "  provider TEXT NOT NULL,"
+    "  model TEXT NOT NULL DEFAULT '',"
     "  confidence REAL,"
     "  source TEXT NOT NULL,"
     "  created_at INTEGER NOT NULL,"
-    "  PRIMARY KEY (fingerprint, target_lang, provider)"
+    "  PRIMARY KEY (fingerprint, target_lang, provider, model)"
     ")"
 )
 _DDL_TRANSLATIONS_LANG_INDEX = (
@@ -143,13 +153,22 @@ class SqliteTranslationMemory:
         segment: Segment,
         target_lang: str,
         fuzzy_threshold: float = DEFAULT_FUZZY_THRESHOLD,
+        *,
+        provider: str | None = None,
+        model: str | None = None,
     ) -> TmHit | None:
-        exact = self._lookup_exact(segment, target_lang)
+        exact = self._lookup_exact(segment, target_lang, provider=provider, model=model)
         if exact is not None:
             return exact
         if self._embedder is None:
             return None
-        return self._lookup_fuzzy(segment, target_lang, fuzzy_threshold)
+        return self._lookup_fuzzy(
+            segment,
+            target_lang,
+            fuzzy_threshold,
+            provider=provider,
+            model=model,
+        )
 
     def store(self, translated: TranslatedSegment) -> None:
         seg = translated.segment
@@ -174,14 +193,15 @@ class SqliteTranslationMemory:
             )
             self._conn.execute(
                 "INSERT OR REPLACE INTO translations "
-                "(fingerprint, target_lang, target_text, provider, "
+                "(fingerprint, target_lang, target_text, provider, model, "
                 " confidence, source, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     seg.fingerprint,
                     translated.target_lang,
                     translated.target_text,
                     translated.provider,
+                    translated.model,
                     translated.confidence,
                     translated.source,
                     now,
@@ -209,6 +229,9 @@ class SqliteTranslationMemory:
     def _init_schema(self) -> None:
         with self._transaction():
             self._conn.execute(_DDL_META)
+            existing_version = self._read_schema_version()
+            if existing_version is not None and existing_version < _SCHEMA_VERSION:
+                self._migrate(existing_version)
             self._conn.execute(_DDL_SEGMENTS)
             self._conn.execute(_DDL_TRANSLATIONS)
             self._conn.execute(_DDL_TRANSLATIONS_LANG_INDEX)
@@ -216,6 +239,36 @@ class SqliteTranslationMemory:
                 "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
                 (_META_KEY_SCHEMA_VERSION, str(_SCHEMA_VERSION)),
             )
+
+    def _read_schema_version(self) -> int | None:
+        """Return the schema version recorded in the ``meta`` table,
+        or ``None`` for fresh databases that have never been written
+        to."""
+        cursor = self._conn.execute(
+            "SELECT value FROM meta WHERE key = ?",
+            (_META_KEY_SCHEMA_VERSION,),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            return None
+        try:
+            return int(row[0])
+        except (TypeError, ValueError):
+            return None
+
+    def _migrate(self, from_version: int) -> None:
+        """Run schema migrations from ``from_version`` to
+        ``_SCHEMA_VERSION``.
+
+        Cycle-2 (v1 → v2): the translations PK gains a ``model``
+        column. SQLite cannot ALTER a primary key in place, so the
+        migration drops the translations table and lets ``_init_schema``
+        recreate it with the new shape. Pre-1.0 cycle-1 just shipped, so
+        the data loss is acceptable; documented in the cycle-2 retro.
+        Future migrations can preserve data by COPY-INTO-NEW-TABLE.
+        """
+        if from_version < 2:
+            self._conn.execute("DROP TABLE IF EXISTS translations")
 
     @contextmanager
     def _transaction(self) -> Iterator[None]:
@@ -228,23 +281,39 @@ class SqliteTranslationMemory:
         else:
             self._conn.execute("COMMIT")
 
-    def _lookup_exact(self, segment: Segment, target_lang: str) -> TmHit | None:
+    def _lookup_exact(
+        self,
+        segment: Segment,
+        target_lang: str,
+        *,
+        provider: str | None = None,
+        model: str | None = None,
+    ) -> TmHit | None:
+        clauses = ["fingerprint = ?", "target_lang = ?"]
+        params: list[object] = [segment.fingerprint, target_lang]
+        if provider is not None:
+            clauses.append("provider = ?")
+            params.append(provider)
+        if model is not None:
+            clauses.append("model = ?")
+            params.append(model)
         cursor = self._conn.execute(
-            "SELECT target_text, provider, confidence, source "
+            "SELECT target_text, provider, model, confidence, source "
             "FROM translations "
-            "WHERE fingerprint = ? AND target_lang = ? "
+            f"WHERE {' AND '.join(clauses)} "
             "ORDER BY created_at DESC LIMIT 1",
-            (segment.fingerprint, target_lang),
+            params,
         )
         row = cursor.fetchone()
         if row is None:
             return None
-        target_text, provider, confidence, _stored_source = row
+        target_text, provider, model, confidence, _stored_source = row
         translated = TranslatedSegment(
             segment=segment,
             target_lang=target_lang,
             target_text=target_text,
             provider=provider,
+            model=model or "",
             confidence=confidence,
             source=TRANSLATION_SOURCE_EXACT_TM,
         )
@@ -259,21 +328,32 @@ class SqliteTranslationMemory:
         segment: Segment,
         target_lang: str,
         threshold: float,
+        *,
+        provider: str | None = None,
+        model: str | None = None,
     ) -> TmHit | None:
         if self._embedder is None:
             return None
         query_embedding = self._embedder(segment.source_text)
+        join_clauses = ["t.target_lang = ?"]
+        join_params: list[object] = [target_lang]
+        if provider is not None:
+            join_clauses.append("t.provider = ?")
+            join_params.append(provider)
+        if model is not None:
+            join_clauses.append("t.model = ?")
+            join_params.append(model)
         cursor = self._conn.execute(
             "SELECT s.fingerprint, s.source_text, s.source_lang, "
             "       s.placeholders_json, s.embedding, "
-            "       t.target_text, t.provider, t.confidence "
+            "       t.target_text, t.provider, t.model, t.confidence "
             "FROM segments s "
             "JOIN translations t "
             "  ON s.fingerprint = t.fingerprint "
-            " AND t.target_lang = ? "
+            f" AND {' AND '.join(join_clauses)} "
             "WHERE s.source_lang = ? "
             "  AND s.embedding IS NOT NULL",
-            (target_lang, segment.source_lang),
+            (*join_params, segment.source_lang),
         )
         best_similarity: float = -1.0
         best_row: _FuzzyRow | None = None
@@ -296,6 +376,7 @@ class SqliteTranslationMemory:
             target_lang=target_lang,
             target_text=best_row.target_text,
             provider=best_row.provider,
+            model=best_row.model,
             confidence=best_row.confidence,
             source=TRANSLATION_SOURCE_FUZZY_TM,
         )
@@ -321,6 +402,7 @@ class _FuzzyRow:
     embedding: bytes
     target_text: str
     provider: str
+    model: str
     confidence: float | None
 
 
@@ -344,7 +426,8 @@ def _row_to_fuzzy(raw: tuple[Any, ...]) -> _FuzzyRow:
         embedding=bytes(embedding_field),
         target_text=str(raw[5]),
         provider=str(raw[6]),
-        confidence=None if raw[7] is None else float(raw[7]),
+        model=str(raw[7]) if raw[7] is not None else "",
+        confidence=None if raw[8] is None else float(raw[8]),
     )
 
 

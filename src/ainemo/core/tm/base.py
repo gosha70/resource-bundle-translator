@@ -72,12 +72,24 @@ class TranslationMemory(Protocol):
         segment: Segment,
         target_lang: str,
         fuzzy_threshold: float = DEFAULT_FUZZY_THRESHOLD,
+        *,
+        provider: str | None = None,
+        model: str | None = None,
     ) -> TmHit | None:
         """Return the best hit at or above ``fuzzy_threshold``, else None.
 
         Implementations check exact match first (cheap); only on miss
         do they consider fuzzy. Returning ``None`` means the pipeline
         should forward the segment to a provider.
+
+        ``provider`` and ``model`` (cycle-2 additions) narrow the
+        lookup to a specific (provider, model) combination so the
+        cycle-2 router can ask: "is there a translation for *this*
+        segment+lang from *this* provider with *this* model?" When
+        either is ``None``, that field is unconstrained and the most
+        recent matching row wins (cycle-1-style "any cached
+        translation" semantics, which the pipeline still uses for
+        the no-explicit-route case).
         """
         ...
 

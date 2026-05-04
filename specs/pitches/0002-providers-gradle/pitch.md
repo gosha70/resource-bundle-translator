@@ -2,8 +2,8 @@
 
 - **ID**: 0002
 - **Appetite**: 6w (wall-clock ceiling; actual session execution ≪ appetite)
-- **Status**: shaped
-- **Owner**: TBD
+- **Status**: building
+- **Owner**: gosha70
 
 ## Problem
 
@@ -297,13 +297,16 @@ These are pre-resolved from AGENTS.md / ROADMAP / cycle-0 conventions per the pr
 1. **Plugin Maven coordinates** → `com.egoge.ai.nemo:translate-gradle-plugin`, plugin id `com.egoge.ai.nemo.translate`. Per AGENTS.md § Reference. Confirmed unless user specifies otherwise.
 2. **Daemon IPC protocol versioning** → semver in the JSON envelope (`{"v": "1", ...}`). Concrete-in-code, evolves additively. Pure pinned-hash versioning is too rigid for an IPC surface that ships with the package.
 3. **Caching layer placement** → at the **router** (above providers), keyed by `(segment.fingerprint, target_lang, persona, model_id)`. Misses fall through to the chosen provider. Per AGENTS.md § Translation Memory Rules ("TM is the first stop, not the last"). Cycle-1 TM and cycle-2 router cache are the **same** SQLite table — the router checks before invoking the provider.
-4. **Anthropic / OpenAI default model IDs** → **/bet-time decision, not pre-resolved.** Model IDs are dated (Anthropic uses `claude-<line>-<version>-YYYYMMDD`; OpenAI uses dated suffixes too) and shift between shaping and build. The build-time team picks a current-at-build dated ID by consulting the official model-list APIs (Anthropic: `https://docs.claude.com/en/api/models-list`; OpenAI: `https://platform.openai.com/docs/models`). The pitch fixes the **format constraint** — module-level constants in `providers/anthropic/_models.py` and `providers/openai/_models.py`, dated IDs, never inlined — but leaves the specific value to /bet so the cycle ships with current models.
-5. **Ollama default model** → **/bet-time decision.** Ollama tags vary by what the user has locally pulled; pick a sensible default at build time (e.g. a current `llama` or `qwen` tag) and document override via `routes.yaml`. Constant lives in `providers/ollama/_models.py`.
+4. **Anthropic / OpenAI default model IDs** → resolved at build time:
+   - Anthropic default: `claude-sonnet-4-5-20250929` (Sonnet 4.5 dated ID) — Sonnet over Opus for translation cost; dated rather than alias per Anthropic docs convention.
+   - OpenAI default: `gpt-4o-2024-11-20` (current GPT-4o snapshot at build time).
+   Both held as `_DEFAULT_MODEL` constants in `providers/<vendor>/_models.py`; never inlined. Override via `routes.yaml`. Cycle 4+ benchmarking may reconsider.
+5. **Ollama default model** → resolved at build time: **`llama3.2`** (current Ollama default; users override via `routes.yaml` for `qwen`, `gemma`, etc.). Constant in `providers/ollama/_models.py`.
 6. **Plugin Portal publish automation** → manual at cycle close. CI verification stops at "build + test + publishPlugins dry-run." Actual publish needs the user's portal credentials and is a deliberate human gate.
 
 Genuinely contested at /bet (surface for the user):
 
-7. **Provider routing strategy when no rule matches and no creds for the configured default** → fail fast (raise) vs fall back to NLLB local. **Recommendation: fail fast.** Silent fallback to a different model class (NMT vs LLM) breaks reproducibility and surprises users at translation-quality time. User can override via `--provider` CLI flag if they need an explicit fallback.
+7. **Provider routing strategy when no rule matches and no creds for the configured default** → resolved at /bet: **fail fast (raise)**. Silent fallback to a different model class (NMT vs LLM) breaks reproducibility and surprises users at translation-quality time. Users who want fallback set it explicitly via `--provider nllb` or a `routes.yaml` rule.
 
 After /bet, no new questions allowed. Anything that surfaces during build goes to the cycle-3 cooldown shaping queue.
 

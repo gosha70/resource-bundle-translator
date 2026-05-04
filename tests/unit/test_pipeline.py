@@ -12,11 +12,16 @@ from ainemo.core.segment import (
 )
 from ainemo.core.tm.sqlite import SqliteTranslationMemory
 from ainemo.core.validators.placeholder import PlaceholderParityValidator
-from ainemo.providers.base import Provider
+from ainemo.providers.base import Provider, ProviderResult
 
 _LANG_EN_US = "en-US"
 _LANG_DE = "de-DE"
 _LANG_FR = "fr-FR"
+
+# Test-stub model id. Concrete providers use real ids from
+# `ainemo.providers._ids`; stubs use this so tests don't accidentally
+# pass through cycle-2 router logic that branches on provider_id.
+_FAKE_MODEL = "test-fake-1.0"
 
 
 class _FakeProvider:
@@ -27,9 +32,16 @@ class _FakeProvider:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str]] = []
 
-    def translate(self, segment: Segment, target_lang: str) -> str:
+    def translate(self, segment: Segment, target_lang: str) -> ProviderResult:
         self.calls.append((segment.source_text, target_lang))
-        return f"[{target_lang}] {segment.source_text}"
+        return ProviderResult(
+            target_text=f"[{target_lang}] {segment.source_text}",
+            provider=self.provider_id,
+            model=_FAKE_MODEL,
+        )
+
+    def supports(self, source_lang: str, target_lang: str) -> bool:
+        return True
 
 
 class _DroppingProvider:
@@ -38,8 +50,7 @@ class _DroppingProvider:
 
     provider_id: ClassVar[str] = "dropping"
 
-    def translate(self, segment: Segment, target_lang: str) -> str:
-        # Strip everything between { and } including the braces
+    def translate(self, segment: Segment, target_lang: str) -> ProviderResult:
         out: list[str] = []
         in_placeholder = False
         for ch in segment.source_text:
@@ -51,7 +62,14 @@ class _DroppingProvider:
                 continue
             if not in_placeholder:
                 out.append(ch)
-        return "".join(out).strip()
+        return ProviderResult(
+            target_text="".join(out).strip(),
+            provider=self.provider_id,
+            model=_FAKE_MODEL,
+        )
+
+    def supports(self, source_lang: str, target_lang: str) -> bool:
+        return True
 
 
 def _write_props(path: Path, body: str) -> None:
@@ -264,6 +282,52 @@ def test_output_path_strips_locale_token(tmp_path: Path) -> None:
     result = pipeline.translate_file(src, tmp_path / "out")
     de_path = result.target_lang_paths[_LANG_DE]
     assert de_path.name == "messages_de_DE.properties"
+    tm.close()
+
+
+def test_pipeline_with_router_attributes_tm_to_concrete_backend(tmp_path: Path) -> None:
+    """Cycle-2 contract pin: when the pipeline's `provider` is a
+    ProviderRouter (the cycle-2 normal case), TM rows must be keyed
+    under the *concrete* backend's id (e.g. ``"openai"``), NOT under
+    the router's façade id (``"router"``). Otherwise a later
+    ``lookup(provider="openai", model=...)`` would miss the row the
+    router just wrote."""
+    from ainemo.providers._usage_log import UsageLog
+    from ainemo.providers.router import ProviderRouter, RoutingConfig
+
+    src = tmp_path / "messages_en_US.properties"
+    src.write_text("greeting=Hello\n", encoding="utf-8")
+
+    backend = _FakeProvider()  # provider_id = "fake"
+    router = ProviderRouter(
+        providers={"fake": backend},
+        routing_config=RoutingConfig(default_provider="fake"),
+        usage_log=UsageLog(tmp_path / "usage.jsonl"),
+    )
+    tm = SqliteTranslationMemory(tmp_path / "tm.sqlite")
+    pipeline = TranslationPipeline(
+        adapter=JavaPropertiesAdapter(),
+        tm=tm,
+        provider=router,
+        validators=(),
+        target_langs=(_LANG_DE,),
+        source_lang=_LANG_EN_US,
+    )
+    pipeline.translate_file(src, tmp_path / "out")
+
+    # The TM row was stored under "fake" (the backend), not "router"
+    # (the façade) — verified by looking up with a provider filter.
+    parsed = JavaPropertiesAdapter().parse(src, _LANG_EN_US)
+    seg = parsed[0]
+    hit = tm.lookup(seg, _LANG_DE, provider="fake")
+    assert hit is not None
+    assert hit.translated.provider == "fake"
+    assert hit.translated.model == "test-fake-1.0"
+
+    # And looking up under "router" would miss — that's the bug this
+    # test pins.
+    miss = tm.lookup(seg, _LANG_DE, provider="router")
+    assert miss is None
     tm.close()
 
 

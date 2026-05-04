@@ -164,13 +164,24 @@ class TranslationPipeline:
             translated = hit.translated
             tm_hit = True
         else:
-            target_text = self._provider.translate(segment, target_lang)
+            # Cycle-2: provider returns ProviderResult (rich payload
+            # with concrete provider id, model id, tokens, latency,
+            # cost). The pipeline threads ``result.provider`` and
+            # ``result.model`` into the TranslatedSegment so TM rows
+            # key on (fingerprint, target_lang, provider, model). When
+            # ``self._provider`` is a ProviderRouter, its ``provider_id``
+            # is the façade ``"router"``; the concrete backend that
+            # actually translated names itself via ``result.provider``.
+            # The router (scope 4) records the full ProviderResult to
+            # UsageLog.
+            result = self._provider.translate(segment, target_lang)
             translated = TranslatedSegment(
                 segment=segment,
                 target_lang=target_lang,
-                target_text=target_text,
-                provider=self._provider.provider_id,
-                confidence=None,
+                target_text=result.target_text,
+                provider=result.provider,
+                model=result.model,
+                confidence=result.confidence,
                 source=TRANSLATION_SOURCE_PROVIDER,
             )
             tm_hit = False
