@@ -26,7 +26,6 @@ from ainemo.providers._retry import with_retry
 from ainemo.providers._usage_log import UsageLog
 from ainemo.providers.base import Provider, ProviderResult
 
-
 # --- Routing config -------------------------------------------------------
 
 
@@ -168,13 +167,23 @@ class ProviderRouter:
             # measurement. This way the router never under-reports
             # latency, which is the metric the cycle-2 cost surveillance
             # actually surveils.
-            if result.latency_ms <= 0:
+            # Defense-in-depth: providers MUST self-attribute via
+            # ``result.provider``, but a buggy provider that returns
+            # an empty string would silently misroute TM rows. Prefer
+            # the result's value; fall back to the concrete provider's
+            # ``provider_id`` ClassVar when the result didn't set it.
+            attributed_provider = result.provider or provider.provider_id
+            # Provider implementations typically populate latency_ms
+            # themselves; if they didn't (or set 0), use the router's
+            # measurement so cost surveillance never under-reports.
+            if result.latency_ms <= 0 or attributed_provider != result.provider:
                 result = ProviderResult(
                     target_text=result.target_text,
+                    provider=attributed_provider,
                     model=result.model,
                     input_tokens=result.input_tokens,
                     output_tokens=result.output_tokens,
-                    latency_ms=elapsed_ms,
+                    latency_ms=elapsed_ms if result.latency_ms <= 0 else result.latency_ms,
                     cost_usd=result.cost_usd,
                     confidence=result.confidence,
                 )

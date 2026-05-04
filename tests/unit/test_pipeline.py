@@ -36,6 +36,7 @@ class _FakeProvider:
         self.calls.append((segment.source_text, target_lang))
         return ProviderResult(
             target_text=f"[{target_lang}] {segment.source_text}",
+            provider=self.provider_id,
             model=_FAKE_MODEL,
         )
 
@@ -61,7 +62,11 @@ class _DroppingProvider:
                 continue
             if not in_placeholder:
                 out.append(ch)
-        return ProviderResult(target_text="".join(out).strip(), model=_FAKE_MODEL)
+        return ProviderResult(
+            target_text="".join(out).strip(),
+            provider=self.provider_id,
+            model=_FAKE_MODEL,
+        )
 
     def supports(self, source_lang: str, target_lang: str) -> bool:
         return True
@@ -277,6 +282,52 @@ def test_output_path_strips_locale_token(tmp_path: Path) -> None:
     result = pipeline.translate_file(src, tmp_path / "out")
     de_path = result.target_lang_paths[_LANG_DE]
     assert de_path.name == "messages_de_DE.properties"
+    tm.close()
+
+
+def test_pipeline_with_router_attributes_tm_to_concrete_backend(tmp_path: Path) -> None:
+    """Cycle-2 contract pin: when the pipeline's `provider` is a
+    ProviderRouter (the cycle-2 normal case), TM rows must be keyed
+    under the *concrete* backend's id (e.g. ``"openai"``), NOT under
+    the router's façade id (``"router"``). Otherwise a later
+    ``lookup(provider="openai", model=...)`` would miss the row the
+    router just wrote."""
+    from ainemo.providers._usage_log import UsageLog
+    from ainemo.providers.router import ProviderRouter, RoutingConfig
+
+    src = tmp_path / "messages_en_US.properties"
+    src.write_text("greeting=Hello\n", encoding="utf-8")
+
+    backend = _FakeProvider()  # provider_id = "fake"
+    router = ProviderRouter(
+        providers={"fake": backend},
+        routing_config=RoutingConfig(default_provider="fake"),
+        usage_log=UsageLog(tmp_path / "usage.jsonl"),
+    )
+    tm = SqliteTranslationMemory(tmp_path / "tm.sqlite")
+    pipeline = TranslationPipeline(
+        adapter=JavaPropertiesAdapter(),
+        tm=tm,
+        provider=router,
+        validators=(),
+        target_langs=(_LANG_DE,),
+        source_lang=_LANG_EN_US,
+    )
+    pipeline.translate_file(src, tmp_path / "out")
+
+    # The TM row was stored under "fake" (the backend), not "router"
+    # (the façade) — verified by looking up with a provider filter.
+    parsed = JavaPropertiesAdapter().parse(src, _LANG_EN_US)
+    seg = parsed[0]
+    hit = tm.lookup(seg, _LANG_DE, provider="fake")
+    assert hit is not None
+    assert hit.translated.provider == "fake"
+    assert hit.translated.model == "test-fake-1.0"
+
+    # And looking up under "router" would miss — that's the bug this
+    # test pins.
+    miss = tm.lookup(seg, _LANG_DE, provider="router")
+    assert miss is None
     tm.close()
 
 

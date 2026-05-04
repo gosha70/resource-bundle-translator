@@ -304,6 +304,7 @@ class _NoOpProvider:
     def translate(self, segment: Segment, target_lang: str) -> ProviderResult:
         return ProviderResult(
             target_text=segment.source_text,
+            provider=PROVIDER_ID_NOOP,
             model=PROVIDER_ID_NOOP,
             input_tokens=None,
             output_tokens=None,

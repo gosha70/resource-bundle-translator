@@ -38,6 +38,7 @@ class _PrefixingProvider:
     def translate(self, segment: Segment, target_lang: str) -> ProviderResult:
         return ProviderResult(
             target_text=f"[{target_lang}] {segment.source_text}",
+            provider=self.provider_id,
             model="test-prefixing-1.0",
         )
 

@@ -43,6 +43,7 @@ class _StubProvider:
         self.calls.append((segment.source_text, target_lang))
         return ProviderResult(
             target_text=self.target_text,
+            provider=self.provider_id,
             model=self.model,
             input_tokens=10,
             output_tokens=20,
@@ -275,7 +276,11 @@ def test_router_retries_on_rate_limit(tmp_path: Path) -> None:
             self.calls += 1
             if self.calls == 1:
                 raise _RateLimitError("simulated")
-            return ProviderResult(target_text="ok", model="flaky-1.0")
+            return ProviderResult(
+                target_text="ok",
+                provider=self.provider_id,
+                model="flaky-1.0",
+            )
 
         def supports(self, source_lang: str, target_lang: str) -> bool:
             return True

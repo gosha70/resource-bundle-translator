@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 TRANSLATION_MAX_LENGTH = 2000
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ProviderResult:
     """One provider call's outcome.
 
@@ -40,11 +40,24 @@ class ProviderResult:
     ``~/.ainemo/usage.jsonl`` and uses ``cost_usd`` / ``latency_ms``
     for cost surveillance. The pipeline unwraps ``target_text`` for
     the TM and validators.
+
+    All fields are keyword-only — same defense-in-depth rationale as
+    :class:`~ainemo.core.segment.TranslatedSegment` (kw-only protects
+    callers from silent corruption when fields are added).
     """
 
     target_text: str
     """The translated text. Placeholders restored to source form
     (the provider is responsible for tokenize/restore if needed)."""
+
+    provider: str
+    """Concrete provider id that produced this result — e.g.
+    ``"openai"``, ``"anthropic"``, ``"nllb"``. Required even when the
+    call goes through :class:`~ainemo.providers.router.ProviderRouter`,
+    because the router's ``provider_id`` is the façade ``"router"``;
+    only the concrete backend can name itself authoritatively. The
+    pipeline persists this onto :class:`TranslatedSegment.provider` so
+    TM rows attribute correctly when the router is in use."""
 
     model: str
     """Provider-specific model id used for this call. Example values:
