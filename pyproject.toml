@@ -92,8 +92,8 @@ extend-exclude = [
     # pre-cycle-2 NLLB/OPUS/OpenAI provider modules are still
     # excluded individually below until scope 5 rewrites them behind
     # the new Protocol; cycle-2 cooldown removes those entries too.
-    "src/ainemo/providers/nllb",
-    "src/ainemo/providers/opus",
+    "src/ainemo/providers/nllb/nllb_model.py",
+    "src/ainemo/providers/opus/marian_mt_model.py",
     "src/ainemo/providers/openai/open_ai_model.py",
     "src/ainemo/providers/model_types.py",
     "src/ainemo/app",
