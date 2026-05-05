@@ -103,7 +103,7 @@ class OpenAIProvider:
         )
         elapsed_ms = int((time.perf_counter() - started) * 1000)
 
-        target_text = _extract_target_text(response)
+        target_text = _extract_target_text(response, segment.source_text)
         input_tokens, output_tokens = _extract_usage(response)
         cost_usd = _estimate_cost(self._model, input_tokens, output_tokens)
 
@@ -142,18 +142,51 @@ def _build_glossary_message(forbidden_terms: tuple[str, ...]) -> str:
     return SYSTEM_PROMPT + GLOSSARY_PREFIX + ", ".join(forbidden_terms)
 
 
-def _extract_target_text(response: object) -> str:
+def _extract_target_text(response: object, source_text: str) -> str:
     """Pull the assistant's reply out of an OpenAI chat-completion
-    response. Strips surrounding whitespace and stray quoting marks
-    (LLMs occasionally wrap their output in quotes despite the prompt
-    saying not to)."""
+    response.
+
+    The model output is preserved **verbatim** with two narrow
+    transport-level cleanups:
+
+    1. A single trailing ``"\\n"`` is stripped — many SDKs append a
+       terminator that isn't part of the translation. Internal
+       whitespace and other trailing whitespace (a literal trailing
+       space the source had) is always preserved.
+    2. **Conditional** quote unwrap: if the model wrapped the entire
+       response in matching ``'`` or ``"`` and the source text was
+       NOT itself wrapped in the same quote character, the wrapper
+       is removed. This handles the LLM-misbehaves-despite-prompt
+       case without corrupting legitimately-quoted bundle strings
+       — button labels like ``"OK"`` and UI text the source author
+       intentionally quoted are preserved.
+
+    Internal whitespace, leading whitespace, and apostrophes inside
+    the body are all preserved verbatim.
+    """
     choices = response.choices  # type: ignore[attr-defined]
     if not choices:
         raise RuntimeError("OpenAI response had no choices.")
     content = choices[0].message.content
     if content is None:
         raise RuntimeError("OpenAI response choice had no content.")
-    return str(content).strip().strip("'\"")
+    raw = str(content)
+    if raw.endswith("\n"):
+        raw = raw[:-1]
+    return _conditionally_unwrap_quotes(raw, source_text)
+
+
+def _conditionally_unwrap_quotes(text: str, source_text: str) -> str:
+    """Strip ``'`` or ``"`` wrapper added by the model only when the
+    source text wasn't itself wrapped in the same quote character."""
+    for quote in ('"', "'"):
+        wrapped = len(text) >= 2 and text[0] == quote and text[-1] == quote
+        source_wrapped = (
+            len(source_text) >= 2 and source_text[0] == quote and source_text[-1] == quote
+        )
+        if wrapped and not source_wrapped:
+            return text[1:-1]
+    return text
 
 
 def _extract_usage(response: object) -> tuple[int | None, int | None]:

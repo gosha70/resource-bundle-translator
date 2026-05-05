@@ -127,13 +127,77 @@ def test_translate_returns_provider_result_with_full_attribution() -> None:
     assert abs(result.cost_usd - expected_cost) < 1e-12
 
 
-def test_translate_strips_stray_quotes_from_response() -> None:
+def test_translate_unwraps_stray_quotes_when_source_unquoted() -> None:
     """LLMs occasionally wrap output in quotes despite the prompt
-    saying not to. The provider strips both ``'`` and ``"`` from the
-    edges."""
+    saying not to. When the source was NOT itself quoted, the wrapper
+    is stripped."""
     client = _FakeClient.with_response('"Hallo, {name}!"')
     result = OpenAIProvider(client=client).translate(_seg(), "de-DE")
     assert result.target_text == "Hallo, {name}!"
+
+
+def test_translate_unwraps_single_quotes_when_source_unquoted() -> None:
+    client = _FakeClient.with_response("'Hallo'")
+    result = OpenAIProvider(client=client).translate(_seg(), "de-DE")
+    assert result.target_text == "Hallo"
+
+
+def test_translate_preserves_quoted_source_translation() -> None:
+    """Cycle-2 contract pin: a button label like ``"OK"`` whose source
+    text is itself wrapped in quotes must round-trip with the quotes
+    intact. The cycle-1 unconditional `.strip("'\\"")` would have
+    corrupted the bundle; cycle 2 only unwraps when the source was
+    unquoted."""
+    client = _FakeClient.with_response('"OK"')
+    result = OpenAIProvider(client=client).translate(_seg('"OK"'), "de-DE")
+    assert result.target_text == '"OK"'
+
+
+def test_translate_preserves_apostrophe_wrapped_source() -> None:
+    client = _FakeClient.with_response("'OK'")
+    result = OpenAIProvider(client=client).translate(_seg("'OK'"), "de-DE")
+    assert result.target_text == "'OK'"
+
+
+def test_translate_preserves_internal_quotes() -> None:
+    """Quotes inside the body — not at the edges — are always
+    preserved, regardless of source shape."""
+    client = _FakeClient.with_response('Er sagte "Hallo" zu mir.')
+    result = OpenAIProvider(client=client).translate(_seg('He said "Hi" to me.'), "de-DE")
+    assert result.target_text == 'Er sagte "Hallo" zu mir.'
+
+
+def test_translate_preserves_leading_and_trailing_spaces() -> None:
+    """Bundle strings sometimes carry intentional padding for UI
+    alignment (e.g. ``" Submit "``). The provider must not strip it."""
+    client = _FakeClient.with_response("  Hallo  ")
+    result = OpenAIProvider(client=client).translate(_seg("  Hello  "), "de-DE")
+    assert result.target_text == "  Hallo  "
+
+
+def test_translate_strips_only_trailing_newline() -> None:
+    """Many SDKs append a terminating newline that isn't part of the
+    translation; the provider strips exactly one trailing ``\\n`` and
+    nothing else."""
+    client = _FakeClient.with_response("Hallo\n")
+    result = OpenAIProvider(client=client).translate(_seg("Hello"), "de-DE")
+    assert result.target_text == "Hallo"
+
+
+def test_translate_preserves_internal_newlines() -> None:
+    """Multi-line bundle values (rare but legal) must round-trip their
+    internal newlines."""
+    client = _FakeClient.with_response("Zeile 1\nZeile 2")
+    result = OpenAIProvider(client=client).translate(_seg("Line 1\nLine 2"), "de-DE")
+    assert result.target_text == "Zeile 1\nZeile 2"
+
+
+def test_translate_preserves_apostrophe_in_body() -> None:
+    """Apostrophes inside the body — possessives, contractions —
+    are never stripped."""
+    client = _FakeClient.with_response("C'est cassé")
+    result = OpenAIProvider(client=client).translate(_seg("It's broken"), "fr-FR")
+    assert result.target_text == "C'est cassé"
 
 
 def test_translate_uses_temperature_zero_for_reproducibility() -> None:
