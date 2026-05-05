@@ -2,8 +2,9 @@
 
 - **ID**: 0002
 - **Appetite**: 6w (wall-clock ceiling; actual session execution ≪ appetite)
-- **Status**: building
+- **Status**: shipped
 - **Owner**: gosha70
+- **Shipped**: 2026-05-05 via [PR #7](https://github.com/gosha70/resource-bundle-translator/pull/7), squash-merge commit `ac30b3e`. Retrospective: [`specs/retros/cycle-2.md`](../../retros/cycle-2.md). All 15 hill scopes done.
 
 ## Problem
 
