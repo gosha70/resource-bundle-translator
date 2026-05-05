@@ -136,6 +136,14 @@ def register_daemon(
 def run_daemon(args: argparse.Namespace) -> int:
     """Drive the request / response loop. Returns 0 on clean stdin
     EOF, non-zero only on unrecoverable startup failure."""
+    # PR #7 review #1: pin UTF-8 encoding and disable newline
+    # translation on the stdin/stdout streams. The protocol is
+    # newline-delimited UTF-8 JSON; on Windows, Python's default text
+    # mode silently translates ``\r\n`` ⇄ ``\n``, which corrupts
+    # framing for any payload whose JSON happens to contain a literal
+    # ``\r``. ``newline=""`` forces stream-level pass-through.
+    sys.stdin.reconfigure(encoding="utf-8", newline="")  # type: ignore[union-attr]
+    sys.stdout.reconfigure(encoding="utf-8", newline="")  # type: ignore[union-attr]
     server = DaemonServer(usage_log_path=args.usage_log_path)
     server.serve(stdin=sys.stdin, stdout=sys.stdout)
     return 0

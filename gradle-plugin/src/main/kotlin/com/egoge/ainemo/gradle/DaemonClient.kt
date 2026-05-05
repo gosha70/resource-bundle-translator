@@ -123,6 +123,21 @@ class DaemonClient
                         "(expected $PROTOCOL_VERSION). Mismatched daemon binary?",
                 )
             }
+            // PR #7 review #7: assert the response carries the same
+            // correlation id we sent. The daemon is single-threaded
+            // today (one in-flight request at a time), but the wire
+            // already carries the id so a future multiplexed daemon
+            // — or a buggy daemon dropping a response and emitting
+            // a stale one — would silently misbind results to ops
+            // without this check.
+            val responseId = response["id"]
+            if (responseId != callId) {
+                throw DaemonException(
+                    "Daemon response correlation id mismatch: sent op=$op id=$callId, " +
+                        "received id=$responseId. Possible response drop or daemon-side " +
+                        "interleaving — treat the connection as poisoned.",
+                )
+            }
             if (response["ok"] == true) {
                 return response["result"] as Map<String, Any?>
             }

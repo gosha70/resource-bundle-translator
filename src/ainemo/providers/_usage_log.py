@@ -25,7 +25,6 @@ JSONL was chosen over a SQLite table because:
 from __future__ import annotations
 
 import json
-import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -185,12 +184,6 @@ def _as_float(value: object) -> float:
     if isinstance(value, (int, float)):
         return float(value)
     return 0.0
-
-
-def _now_ms() -> int:
-    """Wall-clock ms since epoch — handy for callers timing provider
-    calls before they have a result to record."""
-    return int(time.time() * 1000)
 
 
 __all__ = [

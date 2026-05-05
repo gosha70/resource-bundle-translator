@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from dataclasses import replace as _replace
 from typing import Callable, ClassVar, Mapping
 
 from ainemo.core.segment import Segment
@@ -162,31 +163,29 @@ class ProviderRouter:
             started = time.perf_counter()
             result = provider.translate(segment, target_lang)
             elapsed_ms = int((time.perf_counter() - started) * 1000)
-            # Provider implementations typically populate latency_ms
-            # themselves; if they didn't (or set 0), use the router's
-            # measurement. This way the router never under-reports
-            # latency, which is the metric the cycle-2 cost surveillance
-            # actually surveils.
-            # Defense-in-depth: providers MUST self-attribute via
-            # ``result.provider``, but a buggy provider that returns
-            # an empty string would silently misroute TM rows. Prefer
-            # the result's value; fall back to the concrete provider's
-            # ``provider_id`` ClassVar when the result didn't set it.
-            attributed_provider = result.provider or provider.provider_id
-            # Provider implementations typically populate latency_ms
-            # themselves; if they didn't (or set 0), use the router's
-            # measurement so cost surveillance never under-reports.
-            if result.latency_ms <= 0 or attributed_provider != result.provider:
-                result = ProviderResult(
-                    target_text=result.target_text,
-                    provider=attributed_provider,
-                    model=result.model,
-                    input_tokens=result.input_tokens,
-                    output_tokens=result.output_tokens,
-                    latency_ms=elapsed_ms if result.latency_ms <= 0 else result.latency_ms,
-                    cost_usd=result.cost_usd,
-                    confidence=result.confidence,
-                )
+            # PR #7 review #10: split the post-call patch into two
+            # explicit defense-in-depth steps so a future bisect or
+            # reader sees one concern per branch. Observable output is
+            # identical to the pre-split single-conditional form
+            # (``test_router.py`` covers both legs); only the number of
+            # ProviderResult allocations changes (worst case 2 instead
+            # of 1, on the cold path where both fields need patching).
+
+            # Step 1: attribution. Providers MUST self-attribute via
+            # ``result.provider``, but a buggy provider returning an
+            # empty string would silently misroute TM rows. Fall back
+            # to the concrete provider's ``provider_id`` ClassVar when
+            # the result didn't set it.
+            if not result.provider:
+                result = _replace(result, provider=provider.provider_id)
+
+            # Step 2: latency. Providers typically populate
+            # ``latency_ms`` themselves; if they didn't (or set 0),
+            # substitute the router's wall-clock measurement so cost
+            # surveillance never under-reports.
+            if result.latency_ms <= 0:
+                result = _replace(result, latency_ms=elapsed_ms)
+
             return result
 
         if self._retry_exceptions:
