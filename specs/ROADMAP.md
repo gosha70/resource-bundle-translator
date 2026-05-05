@@ -33,13 +33,13 @@ The defensible product is the **intersection of all four**, plus a CC0/CC-BY-onl
 
 ## Cycle plan
 
-Each cycle below is a single Shape-Up bet. Cycles 0 and 1 are shipped; 2 is shaped and the next bet; 3 onward is provisional and will be re-shaped before betting.
+Each cycle below is a single Shape-Up bet. Cycles 0–2 are shipped; 3 onward is provisional and will be re-shaped before betting.
 
 | # | Title | Appetite | Status | Goal in one line |
 |---|---|---|---|---|
 | 0 | Rebrand & Stabilize | 2w | **shipped** (PR #2 merged 2026-05-03; retro: [`retros/cycle-0.md`](retros/cycle-0.md)) | Became AI-NEMO, fixed audit bugs, set up green CI matrix. |
 | 1 | Foundation: Adapters + TM + Validators | 6w | **shipped** (216 tests; CLI ships with `_NoOpProvider` until cycle 2 wires the router) | Four bundle adapters, SQLite TM with embedding fuzzy match, four validators, end-to-end pipeline, `nemo` CLI. |
-| 2 | Provider Abstraction + Gradle Plugin | 6w | **shaped (next bet)** | Pluggable LLM providers (Anthropic + Ollama added) + first Gradle plugin for JVM `.properties`. |
+| 2 | Provider Abstraction + Gradle Plugin | 6w | **shipped** (PR #7 merged 2026-05-05; retro: [`retros/cycle-2.md`](retros/cycle-2.md)) | Pluggable LLM providers (Anthropic + Ollama added) + first Gradle plugin for JVM `.properties`. |
 | 3 | Concept-Oriented Termbase via Kuzu | 6w | stub | Migrate flat termbase to Kuzu, TBX 3.0 I/O, persona system. |
 | 4 | First Domain Pack: legal-en | 6w | stub | Pack format spec, IATE+EuroVoc-derived legal-en pack, Wikidata anchors. |
 | 5 | Reviewer Web UI + QA Layer | 6w | stub | Auto-promotion review queue, confidence scoring, back-translation QA. |
@@ -69,15 +69,28 @@ All 12 scopes landed: Segment + ICU parser, BundleAdapter Protocol with four con
 
 **Why this was cycle 1**: every later capability (Gradle plugin, KG termbase, domain packs) builds on the bundle adapter interface and the TM. The contracts shipped here are the foundation everything else lands on.
 
-## Cycle 2 — Provider Abstraction + Gradle Plugin (6 weeks)
+## Cycle 2 — Provider Abstraction + Gradle Plugin (shipped)
 
-**Pitch**: [pitches/0002-providers-gradle/pitch.md](pitches/0002-providers-gradle/pitch.md) — fully shaped, awaiting `/bet`.
+**Pitch**: [pitches/0002-providers-gradle/pitch.md](pitches/0002-providers-gradle/pitch.md) — status `shipped`.
+**Retro**: [retros/cycle-2.md](retros/cycle-2.md).
+**Shipped**: 2026-05-05 via [PR #7](https://github.com/gosha70/resource-bundle-translator/pull/7), squash-merge commit `ac30b3e`.
 
-**Outcome**: Clean `Provider` Protocol (NLLB, OPUS, OpenAI, **Anthropic Claude**, **Ollama**). Cost & latency tracking per call recorded to `~/.ainemo/usage.jsonl`. Daemon-mode IPC (`nemo daemon`) for build-tool integration. First Gradle plugin published as `com.egoge.ai.nemo.translate`, targeting JVM `messages_*.properties` and Spring resource bundles.
+All 15 scopes landed inside the 6-week appetite. Half A (provider migration) shipped the cycle-2 `Provider` Protocol with a `ProviderResult` data model, every backend (NLLB, OPUS, OpenAI, **Anthropic Claude**, **Ollama**) behind it, the cost/latency-tracked `ProviderRouter`, the `~/.ainemo/usage.jsonl` `UsageLog`, an exponential-backoff `with_retry` helper, the `nemo provider list` / `nemo provider stats` CLI, and `nemo daemon` (newline-delimited JSON-over-stdio with a versioned envelope). Half B (Gradle plugin) shipped the `com.egoge.ai.nemo.translate` plugin as a thin Kotlin façade over the daemon — `aiNemoTranslate {}` DSL, `translateBundles` task, `DaemonClient` with correlation-id assertion, TestKit functional test, and the Plugin Portal publish flow (CI dry-run only; the actual portal upload is a deliberate human gate). Two reviewer-validated bug fixes landed mid-cycle: TM lookups are now provider-scoped by default (a prior `--provider noop` run no longer satisfies a later `--provider openai` run), and the daemon survives `SystemExit` from CLI helpers as a structured `ERR_INVALID_PARAMS` envelope. Cycle 2 also delivered the cost+latency benchmark suite (router overhead p95 < 1ms, UsageLog stats over 100k records p95 < 500ms — opt-in via `pytest -m benchmark`) and full reference docs for every provider and the Gradle plugin.
+
+**Cycle-2 limitations carried forward** (intentional cooldown candidates, see [retros/cycle-2.md](retros/cycle-2.md) § "Carryover into cooldown" for full context):
+
+- The Gradle wrapper is not yet committed; CI runs Python only. Bootstrap is a one-liner from a JDK 17+ host (`gradle wrapper --gradle-version 8.10`) but contributors hit it on first build.
+- `TranslateBundlesTask` declares `tmPath` and `usageLogPath` as `@InputFile`, but the TM SQLite is daemon-created and the usage log is an output. First-run / incremental-build semantics need a real `./gradlew check` to pin.
+- Daemon `for line in stdin` is unbounded — a multi-GB line OOMs the daemon process. Cooldown adds a configurable max-line-bytes ceiling.
+- Concurrency contract is single-threaded today but the Kotlin client uses an `AtomicLong` correlation-id counter implying future parallelism. Cooldown picks one direction (lock the Kotlin side or take the daemon multi-threaded) with intent.
+- Cross-language nullable drift: `DaemonClient.kt` uses `as String` casts on fields the Python side could in principle drop. Cooldown audits the surface and either pins the schema or relaxes the Kotlin types.
+- `DaemonClientTest` spawns a `python3` subprocess and is therefore environment-dependent — silently skipped on JDK-only build agents until the Gradle CI workflow lands.
+
+Plus a Medium-severity backlog (libs version catalog, group/version source-of-truth duplication, min-Gradle enforcement, `UNCHECKED_CAST` on the `target_lang_paths` map, `ERR_INTERNAL` exception-message sanitization, TM connection caching, Windows pipe-deadlock risk on daemon stderr capture) — listed in the retro for cooldown triage.
 
 **Why this order**: the Gradle plugin needs the provider abstraction to be useful (an Anthropic-only or Ollama-only plugin is a non-starter for enterprise users). The router-level cache reuses cycle-1's TM table — no double-caching.
 
-**Likely no-gos**: Maven plugin, npm plugin (cycle 6), Android `strings.xml` (PhilKes already owns that), web UI (cycle 5), `.xcstrings` / Fluent / `.resx`, KG / termbase work.
+**Scope-hammered out**: Maven plugin, npm plugin (cycle 6), Android `strings.xml` (PhilKes already owns that), web UI (cycle 5), `.xcstrings` / Fluent / `.resx`, KG / termbase work.
 
 ## Cycle 3 — Concept-Oriented Termbase via Kuzu (6 weeks)
 
