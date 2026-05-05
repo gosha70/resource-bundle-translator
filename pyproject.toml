@@ -126,7 +126,14 @@ ignore_missing_imports = true
 minversion = "7.0"
 python_files = ["test_*.py"]
 testpaths = ["tests"]
-addopts = "-ra --strict-markers --strict-config"
+# Default collection excludes the benchmark suite — those tests have
+# performance thresholds (router overhead, UsageLog stats latency)
+# that depend on the host's CPU + IO and are not deterministic
+# enough for the per-PR CI gate. Run them explicitly with
+# ``pytest -m benchmark`` (the marker docs already say "manual run").
+# Without this exclusion CI's full ``pytest`` run picks up the
+# 100k-record stats benchmark and flakes on slower runners.
+addopts = "-ra --strict-markers --strict-config -m 'not benchmark'"
 markers = [
     "unit: fast, isolated unit test",
     "integration: real subsystems (sqlite, embedding model)",

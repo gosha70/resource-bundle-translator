@@ -387,3 +387,73 @@ def test_translate_file_empty_target_langs_rejected(tmp_path: Path) -> None:
     )
     assert response["ok"] is False
     assert response["error"]["code"] == ERR_INVALID_PARAMS
+
+
+# --- SystemExit handling (P2 fix from PR #7 review) -----------------------
+
+
+def test_translate_file_unknown_extension_returns_envelope_not_crash(
+    tmp_path: Path,
+) -> None:
+    """``_resolve_adapter`` raises ``SystemExit`` (a BaseException)
+    when the source has an unknown extension. The daemon must catch
+    that and surface it as a structured error envelope — without
+    this fix the daemon process would terminate on a single bad
+    request, breaking the wire contract for the Gradle plugin."""
+    src = tmp_path / "messages.txt"  # Not a recognized bundle extension.
+    src.write_text("k=v\n", encoding="utf-8")
+
+    server = DaemonServer(usage_log_path=tmp_path / "usage.jsonl")
+    [response] = _drive(
+        server,
+        [
+            {
+                "v": "1",
+                "id": "se1",
+                "op": OP_TRANSLATE_FILE,
+                "params": {
+                    "source_path": str(src),
+                    "target_langs": ["de-DE"],
+                    "output_dir": str(tmp_path / "out"),
+                    "provider": "noop",
+                    "tm_path": str(tmp_path / "tm.sqlite"),
+                },
+            }
+        ],
+    )
+    assert response["ok"] is False
+    assert response["error"]["code"] == ERR_INVALID_PARAMS
+    # Whatever the helper said about the extension makes it into the
+    # message — the daemon doesn't swallow the diagnostic.
+    assert "extension" in response["error"]["message"].lower()
+
+
+def test_loop_continues_after_systemexit(tmp_path: Path) -> None:
+    """Defensive: a request that triggers SystemExit must NOT take
+    down the serve loop. A well-formed ping after the bad request
+    must still get answered."""
+    src = tmp_path / "messages.txt"
+    src.write_text("k=v\n", encoding="utf-8")
+    server = DaemonServer(usage_log_path=tmp_path / "usage.jsonl")
+    responses = _drive(
+        server,
+        [
+            {
+                "v": "1",
+                "id": "bad",
+                "op": OP_TRANSLATE_FILE,
+                "params": {
+                    "source_path": str(src),
+                    "target_langs": ["de-DE"],
+                    "output_dir": str(tmp_path / "out"),
+                    "provider": "noop",
+                    "tm_path": str(tmp_path / "tm.sqlite"),
+                },
+            },
+            {"v": "1", "id": "good", "op": OP_PING},
+        ],
+    )
+    assert len(responses) == 2
+    assert responses[0]["ok"] is False
+    assert responses[0]["error"]["code"] == ERR_INVALID_PARAMS
+    assert responses[1]["ok"] is True

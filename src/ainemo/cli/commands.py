@@ -198,6 +198,12 @@ def run_translate(args: argparse.Namespace) -> int:
             target_langs=target_langs,
             source_lang=args.source_lang,
             strict=args.strict,
+            # P1 fix (PR #7 review): scope TM lookups to the requested
+            # provider so a prior ``--provider noop`` run does not
+            # satisfy a later ``--provider openai`` run. Model is left
+            # unconstrained — callers who want per-model scoping pass
+            # it through the routes-config layer (cycle 3).
+            expected_provider=args.provider_id,
         )
         result = pipeline.translate_file(source_path, args.output_dir)
         _print_translate_summary(result)

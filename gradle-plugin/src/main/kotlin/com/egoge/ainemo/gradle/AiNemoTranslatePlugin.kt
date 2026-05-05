@@ -29,6 +29,14 @@ class AiNemoTranslatePlugin : Plugin<Project> {
                 EXTENSION_NAME,
                 AiNemoTranslateExtension::class.java,
             )
+        // P2 fix (PR #7 review): the extension docs promise that
+        // ``outputDirectory`` defaults to ``$buildDir/ai-nemo`` when
+        // unset. Setting that default needs the project's layout
+        // (which the @Inject constructor doesn't see), so the
+        // convention is wired here in apply(). Without this, Gradle's
+        // required-property validation rejects the task before its
+        // @TaskAction body — its own runtime fallback is unreachable.
+        extension.outputDirectory.convention(project.layout.buildDirectory.dir("ai-nemo"))
 
         project.tasks.register(TASK_NAME, TranslateBundlesTask::class.java) { task ->
             task.group = "ai-nemo"

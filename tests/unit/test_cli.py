@@ -398,3 +398,62 @@ def test_provider_unknown_subcommand_returns_usage_error(
     unknown-subcommand branch and exit non-zero."""
     rc = main([CMD_NAME_PROVIDER])
     assert rc == 2
+
+
+def test_translate_provider_scopes_tm_lookup(tmp_path: Path) -> None:
+    """End-to-end CLI fix from PR #7 P1: a first run with a fake
+    provider must NOT satisfy a second run that asked for a different
+    provider via ``--provider``. Both runs use the same TM file. This
+    test uses ``--provider noop`` for both, and the second run only
+    hits the TM if a noop row was already there from the first
+    (preserving the within-provider caching benefit)."""
+    src = tmp_path / "messages_en_US.properties"
+    src.write_text("greeting=Hello\n", encoding="utf-8")
+    tm_path = tmp_path / "tm.sqlite"
+    log = tmp_path / "usage.jsonl"
+
+    # Two consecutive runs with --provider noop. Both write rows
+    # under provider="noop". The second run must hit TM.
+    rc1 = main(
+        [
+            CMD_NAME_TRANSLATE,
+            "--from",
+            str(src),
+            "--to-langs",
+            "de-DE",
+            "--output-dir",
+            str(tmp_path / "out1"),
+            "--tm-path",
+            str(tm_path),
+            "--usage-log",
+            str(log),
+            "--provider",
+            "noop",
+        ]
+    )
+    assert rc1 == 0
+
+    rc2 = main(
+        [
+            CMD_NAME_TRANSLATE,
+            "--from",
+            str(src),
+            "--to-langs",
+            "de-DE",
+            "--output-dir",
+            str(tmp_path / "out2"),
+            "--tm-path",
+            str(tm_path),
+            "--usage-log",
+            str(log),
+            "--provider",
+            "noop",
+        ]
+    )
+    assert rc2 == 0
+
+    # Two records in the usage log = first-run-provider-call only;
+    # the second run hit TM. (The noop provider records to UsageLog
+    # via the router on every call; one segment × first run only.)
+    lines = [ln for ln in log.read_text(encoding="utf-8").splitlines() if ln]
+    assert len(lines) == 1

@@ -94,6 +94,8 @@ class TranslationPipeline:
         source_lang: str,
         fuzzy_threshold: float = DEFAULT_FUZZY_THRESHOLD,
         strict: bool = False,
+        expected_provider: str | None = None,
+        expected_model: str | None = None,
     ) -> None:
         self._adapter = adapter
         self._tm = tm
@@ -103,6 +105,16 @@ class TranslationPipeline:
         self._source_lang = source_lang
         self._fuzzy_threshold = fuzzy_threshold
         self._strict = strict
+        # Cycle-2 P1 fix (PR #7 review): when the caller commits to a
+        # specific provider (e.g. ``nemo translate --provider openai``),
+        # the TM lookup is scoped to rows produced by that provider.
+        # Without this, a prior ``--provider noop`` (or a different
+        # backend) run can satisfy a later run for a different
+        # provider — silently bypassing the requested model. ``None``
+        # preserves cycle-1 "any cached translation" semantics for
+        # callers that haven't opted into a specific provider.
+        self._expected_provider = expected_provider
+        self._expected_model = expected_model
 
     def translate_file(self, source_path: Path, output_dir: Path) -> PipelineResult:
         segments = self._adapter.parse(source_path, self._source_lang)
@@ -154,7 +166,13 @@ class TranslationPipeline:
     # --- Internals ---
 
     def _translate_one(self, segment: Segment, target_lang: str) -> tuple[SegmentOutcome, bool]:
-        hit = self._tm.lookup(segment, target_lang, self._fuzzy_threshold)
+        hit = self._tm.lookup(
+            segment,
+            target_lang,
+            self._fuzzy_threshold,
+            provider=self._expected_provider,
+            model=self._expected_model,
+        )
         if hit is not None and hit.match_type == TM_MATCH_TYPE_EXACT:
             translated = hit.translated
             tm_hit = True

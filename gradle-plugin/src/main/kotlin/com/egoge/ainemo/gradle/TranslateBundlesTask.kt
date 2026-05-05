@@ -71,8 +71,12 @@ abstract class TranslateBundlesTask : DefaultTask() {
         }
         val source = sourceFile.get().asFile
         require(source.exists()) { "Source bundle not found: ${source.absolutePath}" }
-        val output = outputDirectory.orNull?.asFile
-            ?: project.layout.buildDirectory.dir("ai-nemo").get().asFile
+        // The extension installs a ``$buildDir/ai-nemo`` convention on
+        // outputDirectory in AiNemoTranslatePlugin.apply(); ``get()``
+        // is safe here because Gradle's required-property validation
+        // would have failed the task earlier if neither the
+        // convention nor an explicit value were set.
+        val output = outputDirectory.get().asFile
         output.mkdirs()
 
         val pluginLogger = GradleLoggerAdapter(logger)

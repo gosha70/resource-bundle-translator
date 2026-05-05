@@ -354,3 +354,120 @@ def test_warnings_count_in_result(tmp_path: Path) -> None:
     assert result.warning_count == 0
     assert result.error_count == 0
     tm.close()
+
+
+# --- expected_provider TM scoping (P1 fix from PR #7 review) --------------
+
+
+class _SecondProvider:
+    """Second stub backend with a different provider_id, so we can pin
+    the cross-provider TM scoping behavior."""
+
+    provider_id: ClassVar[str] = "other"
+
+    def translate(self, segment: Segment, target_lang: str) -> ProviderResult:
+        return ProviderResult(
+            target_text=f"[OTHER:{target_lang}] {segment.source_text}",
+            provider=self.provider_id,
+            model="other-model-2.0",
+        )
+
+    def supports(self, source_lang: str, target_lang: str) -> bool:
+        return True
+
+
+def test_expected_provider_scopes_tm_lookup_to_its_rows(tmp_path: Path) -> None:
+    """A second run with ``expected_provider="other"`` must not be
+    served from rows the first run wrote under ``"fake"``. Without
+    the scoping the second run would reuse the first row and never
+    call the second provider — silently bypassing ``--provider``."""
+    src = tmp_path / "messages_en_US.properties"
+    _write_props(src, "greeting=Hello\n")
+
+    tm = SqliteTranslationMemory(tmp_path / "tm.sqlite")
+
+    # Run 1: provider "fake", no expected_provider (cycle-1 default).
+    fake = _FakeProvider()
+    TranslationPipeline(
+        adapter=JavaPropertiesAdapter(),
+        tm=tm,
+        provider=fake,
+        validators=(),
+        target_langs=(_LANG_DE,),
+        source_lang=_LANG_EN_US,
+    ).translate_file(src, tmp_path / "out1")
+    assert len(fake.calls) == 1  # Provider called once.
+
+    # Run 2: provider "other", expected_provider="other" — the cached
+    # "fake" row must be ignored, and the "other" provider must be
+    # called.
+    other = _SecondProvider()
+    result = TranslationPipeline(
+        adapter=JavaPropertiesAdapter(),
+        tm=tm,
+        provider=other,
+        validators=(),
+        target_langs=(_LANG_DE,),
+        source_lang=_LANG_EN_US,
+        expected_provider="other",
+    ).translate_file(src, tmp_path / "out2")
+    assert result.tm_hit_count == 0
+    assert result.provider_call_count == 1
+    written = result.target_lang_paths[_LANG_DE].read_text(encoding="utf-8")
+    assert "[OTHER:de-DE] Hello" in written
+    assert "[de-DE] Hello" not in written
+
+    # Run 3: provider "other" again with expected_provider="other".
+    # Now there IS an "other" row from run 2, so this run should hit
+    # TM and skip the provider.
+    other2 = _SecondProvider()
+    result3 = TranslationPipeline(
+        adapter=JavaPropertiesAdapter(),
+        tm=tm,
+        provider=other2,
+        validators=(),
+        target_langs=(_LANG_DE,),
+        source_lang=_LANG_EN_US,
+        expected_provider="other",
+    ).translate_file(src, tmp_path / "out3")
+    assert result3.tm_hit_count == 1
+    assert result3.provider_call_count == 0
+    tm.close()
+
+
+def test_expected_provider_none_preserves_cycle1_any_match_semantics(
+    tmp_path: Path,
+) -> None:
+    """Callers that don't set expected_provider keep cycle-1 behavior:
+    any cached row for the segment+target_lang satisfies the lookup,
+    regardless of which backend produced it. Pinning this protects the
+    cycle-1 e2e tests and the bare-provider (no router) callers."""
+    src = tmp_path / "messages_en_US.properties"
+    _write_props(src, "greeting=Hello\n")
+
+    tm = SqliteTranslationMemory(tmp_path / "tm.sqlite")
+    fake = _FakeProvider()
+    TranslationPipeline(
+        adapter=JavaPropertiesAdapter(),
+        tm=tm,
+        provider=fake,
+        validators=(),
+        target_langs=(_LANG_DE,),
+        source_lang=_LANG_EN_US,
+    ).translate_file(src, tmp_path / "out1")
+
+    other = _SecondProvider()
+    result = TranslationPipeline(
+        adapter=JavaPropertiesAdapter(),
+        tm=tm,
+        provider=other,
+        validators=(),
+        target_langs=(_LANG_DE,),
+        source_lang=_LANG_EN_US,
+        # expected_provider not set — cycle-1 semantics.
+    ).translate_file(src, tmp_path / "out2")
+    # The cached "fake" row satisfies the lookup, so the second
+    # provider is never called.
+    assert result.tm_hit_count == 1
+    assert result.provider_call_count == 0
+    tm.close()

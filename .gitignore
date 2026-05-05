@@ -37,3 +37,9 @@ Pipfile.lock
 # Per AGENTS.md § Translation-Domain Conventions: TM is opt-in for
 # git tracking, not default.
 .ainemo/
+
+# Benchmark result JSON files — per-host artifacts written by the
+# opt-in benchmark suite (``pytest -m benchmark``). Track regressions
+# by diffing successive local runs or capturing the JSON in PR
+# comments; the files themselves are not deliverables.
+tests/benchmarks/results/

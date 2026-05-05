@@ -236,6 +236,20 @@ class DaemonServer:
                 code=ERR_PROVIDER_FAILURE,
                 message=str(exc),
             )
+        except SystemExit as exc:
+            # P2 fix (PR #7 review): the cycle-1 CLI helpers raise
+            # ``SystemExit`` for usage errors (unknown bundle extension,
+            # missing format flag). ``SystemExit`` derives from
+            # BaseException, NOT Exception, so without this branch the
+            # daemon would terminate on a callable's misconfiguration
+            # — breaking the wire contract that one bad request never
+            # takes down the loop. Convert to a structured envelope.
+            logger.warning("daemon op %r raised SystemExit: %s", op, exc)
+            return _error_envelope(
+                request_id=request_id,
+                code=ERR_INVALID_PARAMS,
+                message=str(exc) if str(exc) else "operation aborted with SystemExit",
+            )
         except Exception as exc:  # noqa: BLE001 — daemon must never crash on caller input
             logger.exception("daemon op %r raised", op)
             return _error_envelope(
@@ -354,6 +368,10 @@ class DaemonServer:
                 target_langs=target_langs,
                 source_lang=str(source_lang),
                 strict=False,
+                # P1 fix (PR #7 review): scope TM lookups to the
+                # requested provider so a prior run with a different
+                # backend does not satisfy this one.
+                expected_provider=provider_id,
             )
             result = pipeline.translate_file(source_path, output_dir)
         finally:
