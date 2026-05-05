@@ -74,46 +74,22 @@ include = [
 ]
 
 # ---------------------------------------------------------------------------
-# Linting (ruff). Cycle 0 keeps default rule set (E + F). Cycle 1+ tightens.
-# Legacy code that's deleting at end of cycle 1 is excluded from enforcement
-# per the rabbit hole "Don't try to make CI green on legacy code"
-# (see specs/pitches/0000-rebrand-stabilize/pitch.md § Rabbit holes).
-# Cycle 1's pitch carries an explicit scope item to remove these excludes
-# as legacy modules delete.
+# Linting (ruff). All in-tree code is linted; the cycle-0/1/2 cleanup is
+# complete and there are no legacy carve-outs left. ``scratch`` is the
+# explicit no-lint sandbox for token-preservation experiments
+# (see scratch/README.md).
 # ---------------------------------------------------------------------------
 [tool.ruff]
 line-length = 100
 target-version = "py310"
-extend-exclude = [
-    "scratch",
-    "src/ainemo/_legacy",
-    # Cycle-2 added new provider modules (router.py, _usage_log.py,
-    # _retry.py, _ids.py, base.py rewrite) that MUST be linted. The
-    # pre-cycle-2 NLLB/OPUS/OpenAI provider modules are still
-    # excluded individually below until scope 5 rewrites them behind
-    # the new Protocol; cycle-2 cooldown removes those entries too.
-    "src/ainemo/providers/nllb/nllb_model.py",
-    "src/ainemo/providers/opus/marian_mt_model.py",
-    "src/ainemo/providers/openai/open_ai_model.py",
-    "src/ainemo/providers/model_types.py",
-    "src/ainemo/app",
-    "src/ainemo/config",
-    "src/ainemo/utils",
-    "src/ainemo/cli/resource_bundle_generator.py",
-    "src/ainemo/cli/resource_bundle_git.py",
-    "languages.py",
-    "translation.py",
-    "translation_request.py",
-    "translation_service.py",
-]
+extend-exclude = ["scratch"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
 
 # ---------------------------------------------------------------------------
-# Typechecking (mypy strict per AGENTS.md § Stack). Same exclusion logic as
-# ruff: legacy and moved-as-is code is non-strict for cycle 0; cycle 1+
-# tightens.
+# Typechecking (mypy strict per AGENTS.md § Stack). All in-tree modules are
+# strict-typed after cycle-2 scope 5d removed the cycle-0 legacy carryover.
 # ---------------------------------------------------------------------------
 [tool.mypy]
 python_version = "3.10"
@@ -122,40 +98,8 @@ mypy_path = "src"
 explicit_package_bases = true
 namespace_packages = true
 
-[[tool.mypy.overrides]]
-module = "ainemo._legacy.*"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "ainemo.providers.*"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "ainemo.app.*"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "ainemo.config.*"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "ainemo.utils.*"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "ainemo.cli.resource_bundle_generator"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "ainemo.cli.resource_bundle_git"
-ignore_errors = true
-
-# Top-level deprecation shims — same treatment.
-[[tool.mypy.overrides]]
-module = ["languages", "translation", "translation_request", "translation_service"]
-ignore_errors = true
-
-# Vendor libraries without type stubs. Cycle 1+ may add per-library stubs.
+# Vendor libraries without type stubs. Per-library stubs land alongside
+# integrations as they harden.
 [[tool.mypy.overrides]]
 module = [
     "transformers.*",
@@ -190,14 +134,6 @@ markers = [
 [tool.coverage.run]
 source = ["src/ainemo"]
 branch = true
-omit = [
-    "src/ainemo/_legacy/*",
-    "src/ainemo/providers/*",
-    "src/ainemo/app/*",
-    "src/ainemo/config/*",
-    "src/ainemo/utils/*",
-    "src/ainemo/cli/resource_bundle_*.py",
-]
 
 [tool.coverage.report]
 show_missing = true

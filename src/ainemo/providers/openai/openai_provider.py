@@ -220,7 +220,7 @@ def _estimate_cost(model: str, input_tokens: int | None, output_tokens: int | No
 
 # Provider Protocol satisfaction is enforced via runtime_checkable; the
 # below assertion documents the cycle-2 contract at module-load time.
-_: type[Provider] = OpenAIProvider  # type: ignore[assignment]
+_: type[Provider] = OpenAIProvider
 
 
 __all__ = ["DEFAULT_MODEL", "DEFAULT_MAX_TOKENS", "OpenAIProvider"]

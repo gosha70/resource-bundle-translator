@@ -10,7 +10,7 @@ ProviderResult; latency is measured wall-clock.
 from __future__ import annotations
 
 import time
-from typing import Any, ClassVar, Final
+from typing import Any, ClassVar, Final, cast
 
 from ainemo.core.segment import Segment
 from ainemo.providers._ids import PROVIDER_ID_NLLB
@@ -100,7 +100,13 @@ def _translate_with_pipeline(
     without standing up the HF transformers types."""
     from transformers import pipeline
 
-    translator = pipeline(
+    # The cycle-2 transformers stubs enumerate every task name as a
+    # Literal overload, but ``"translation"`` is missing despite being
+    # supported at runtime (transformers maps it onto a TextGeneration-
+    # like translation pipeline). Cast through Any so mypy stops trying
+    # to find a matching overload.
+    pipeline_factory = cast(Any, pipeline)
+    translator = pipeline_factory(
         task="translation",
         model=model,
         tokenizer=tokenizer,

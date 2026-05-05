@@ -8,28 +8,19 @@ Ollama) implements, with a richer result type than cycle-1's
 ``str`` return so the cycle-2 router can record per-call cost/latency/
 token usage to ``~/.ainemo/usage.jsonl``.
 
-The legacy :class:`TranslatorModel` ABC stays in this module for
-backward compat with the cycle-1 NoOp CLI surface; cycle-2 scope 5
-deletes it once every concrete backend has been migrated to the new
-Protocol.
+The cycle-1 :class:`TranslatorModel` ABC and ``TRANSLATION_MAX_LENGTH``
+constant were deleted in cycle-2 scope 5d; concrete cycle-2 providers
+declare per-provider max-length defaults (see ``DEFAULT_MAX_LENGTH``
+constants in :mod:`ainemo.providers.nllb.nllb_provider` and
+:mod:`ainemo.providers.opus.opus_provider`).
 """
 
 from __future__ import annotations
 
-import logging
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import ClassVar, Dict, List, Protocol, Tuple, runtime_checkable
+from typing import ClassVar, Protocol, runtime_checkable
 
-from ainemo._legacy.translation_request import TranslationRequest
 from ainemo.core.segment import Segment
-
-logger = logging.getLogger(__name__)
-
-# Legacy constant — cycle-1 used this in marian / nllb token-budgeting.
-# Kept here until scope 5 deletes the legacy ABC and the providers that
-# rely on it migrate to the new Protocol's per-provider configuration.
-TRANSLATION_MAX_LENGTH = 2000
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -93,8 +84,8 @@ class Provider(Protocol):
 
     Cycle 2 finalizes this surface. Every concrete backend implements
     ``translate`` and ``supports``; the router calls only these two
-    methods. Cycle-2 scope 5 migrates the existing
-    NLLB/OPUS/OpenAI providers; scopes 6+7 add Anthropic and Ollama.
+    methods. Cycle-2 scope 5 migrated NLLB/OPUS/OpenAI; scopes 6+7
+    add Anthropic and Ollama.
     """
 
     provider_id: ClassVar[str]
@@ -121,53 +112,4 @@ class Provider(Protocol):
         ...
 
 
-class TranslatorModel(ABC):
-    """LEGACY (cycle-1 carryover). Will be deleted by cycle-2 scope 5
-    once every concrete backend (NLLB/OPUS/OpenAI) has been migrated
-    to the new :class:`Provider` Protocol. Do not write new providers
-    against this ABC.
-    """
-
-    def __init__(self, cache_dir=None, logging=None):
-        """Initializes TranslatorModel with optional Logging."""
-        self.logging = logging
-        self.cache_dir = cache_dir
-
-    @abstractmethod
-    def translate(self, translation_request: TranslationRequest):
-        """Legacy translate signature — see :class:`Provider` for the
-        cycle-2 replacement."""
-        pass
-
-    def preserve_glossary_words(
-        self, text: str, glossary: List[Tuple[str, str]], preserved_words: Dict[str, str]
-    ) -> str:
-        pass
-
-    def encode_placeholders(self, text: str, preserved_words: Dict[str, str]) -> str:
-        pass
-
-    def restore_preserved_words(self, text: str, preserved_words: Dict[str, str]) -> str:
-        for token, placeholder in preserved_words.items():
-            text = text.replace(token, placeholder)
-        return text
-
-    def log_info(self, message: str):
-        if self.logging is None:
-            logger.info(message)
-        else:
-            self.logging.info(message)
-
-    def log_error(self, message: str):
-        if self.logging is None:
-            logger.error(message)
-        else:
-            self.logging.error(message)
-
-
-__all__ = [
-    "Provider",
-    "ProviderResult",
-    "TranslatorModel",
-    "TRANSLATION_MAX_LENGTH",
-]
+__all__ = ["Provider", "ProviderResult"]
