@@ -12,10 +12,10 @@
     {"id": 7,  "name": "OllamaProvider (NEW)",                          "status": "done",   "moved_at": "2026-05-02"},
     {"id": 8,  "name": "nemo provider list / stats CLI",                "status": "done",   "moved_at": "2026-05-02"},
     {"id": 9,  "name": "Daemon mode (nemo daemon JSON-over-stdio)",     "status": "done",   "moved_at": "2026-05-02"},
-    {"id": 10, "name": "gradle-plugin/ skeleton + Kotlin DSL",          "status": "uphill", "moved_at": null},
-    {"id": 11, "name": "TranslateBundlesTask + DaemonClient",           "status": "uphill", "moved_at": null},
-    {"id": 12, "name": "Gradle TestKit functional test",                "status": "uphill", "moved_at": null},
-    {"id": 13, "name": "Plugin Portal publishing setup",                "status": "uphill", "moved_at": null},
+    {"id": 10, "name": "gradle-plugin/ skeleton + Kotlin DSL",          "status": "done",   "moved_at": "2026-05-02"},
+    {"id": 11, "name": "TranslateBundlesTask + DaemonClient",           "status": "done",   "moved_at": "2026-05-02"},
+    {"id": 12, "name": "Gradle TestKit functional test",                "status": "done",   "moved_at": "2026-05-02"},
+    {"id": 13, "name": "Plugin Portal publishing setup",                "status": "done",   "moved_at": "2026-05-02"},
     {"id": 14, "name": "Benchmarks (cost + latency)",                   "status": "uphill", "moved_at": null},
     {"id": 15, "name": "Documentation (providers, gradle plugin)",      "status": "uphill", "moved_at": null}
   ]

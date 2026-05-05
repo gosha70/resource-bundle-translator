@@ -20,6 +20,7 @@ from ainemo.cli.daemon import (
     ERR_VERSION_MISMATCH,
     OP_PING,
     OP_TRANSLATE,
+    OP_TRANSLATE_FILE,
     PROTOCOL_VERSION,
     DaemonServer,
 )
@@ -295,3 +296,94 @@ def test_bad_request_does_not_terminate_serve_loop(tmp_path: Path) -> None:
     assert responses[1]["ok"] is True
     assert responses[2]["ok"] is False
     assert responses[3]["ok"] is True
+
+
+# --- translate_file op (cycle-2 Gradle plugin's headline batch op) --------
+
+
+def test_translate_file_writes_per_target_lang_outputs(tmp_path: Path) -> None:
+    """End-to-end: daemon parses the source bundle, runs the pipeline
+    once per target lang, and writes one output file per language."""
+    src = tmp_path / "messages_en_US.properties"
+    src.write_text("greeting=Hello\nfarewell=Goodbye\n", encoding="utf-8")
+    output_dir = tmp_path / "out"
+
+    server = DaemonServer(usage_log_path=tmp_path / "usage.jsonl")
+    [response] = _drive(
+        server,
+        [
+            {
+                "v": "1",
+                "id": "tf1",
+                "op": OP_TRANSLATE_FILE,
+                "params": {
+                    "source_path": str(src),
+                    "target_langs": ["de-DE", "fr-FR"],
+                    "output_dir": str(output_dir),
+                    "provider": "noop",
+                    "tm_path": str(tmp_path / "tm.sqlite"),
+                },
+            }
+        ],
+    )
+    assert response["ok"] is True, response
+    result = response["result"]
+    assert "de-DE" in result["target_lang_paths"]
+    assert "fr-FR" in result["target_lang_paths"]
+    assert Path(result["target_lang_paths"]["de-DE"]).exists()
+    assert Path(result["target_lang_paths"]["fr-FR"]).exists()
+    assert result["error_count"] == 0
+    # Two segments × two target langs = four provider calls.
+    assert result["provider_call_count"] == 4
+
+
+def test_translate_file_missing_source_returns_clean_error(tmp_path: Path) -> None:
+    server = DaemonServer(usage_log_path=tmp_path / "usage.jsonl")
+    [response] = _drive(
+        server,
+        [
+            {
+                "v": "1",
+                "id": "tf2",
+                "op": OP_TRANSLATE_FILE,
+                "params": {
+                    "source_path": str(tmp_path / "nope.properties"),
+                    "target_langs": ["de-DE"],
+                    "output_dir": str(tmp_path / "out"),
+                    "provider": "noop",
+                    "tm_path": str(tmp_path / "tm.sqlite"),
+                },
+            }
+        ],
+    )
+    assert response["ok"] is False
+    assert response["error"]["code"] == ERR_INVALID_PARAMS
+    assert "does not exist" in response["error"]["message"]
+
+
+def test_translate_file_empty_target_langs_rejected(tmp_path: Path) -> None:
+    """An empty target_langs list is invalid params, not a silent
+    no-op — the Gradle plugin's misconfiguration shouldn't silently
+    succeed without translating anything."""
+    src = tmp_path / "messages_en_US.properties"
+    src.write_text("k=v\n", encoding="utf-8")
+    server = DaemonServer(usage_log_path=tmp_path / "usage.jsonl")
+    [response] = _drive(
+        server,
+        [
+            {
+                "v": "1",
+                "id": "tf3",
+                "op": OP_TRANSLATE_FILE,
+                "params": {
+                    "source_path": str(src),
+                    "target_langs": [],
+                    "output_dir": str(tmp_path / "out"),
+                    "provider": "noop",
+                    "tm_path": str(tmp_path / "tm.sqlite"),
+                },
+            }
+        ],
+    )
+    assert response["ok"] is False
+    assert response["error"]["code"] == ERR_INVALID_PARAMS
