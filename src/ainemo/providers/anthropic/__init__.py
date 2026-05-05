@@ -1,0 +1,1 @@
+"""Anthropic managed-translation provider."""

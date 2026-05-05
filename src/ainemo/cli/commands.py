@@ -30,6 +30,7 @@ from ainemo.core.validators.icu import IcuSyntaxValidator
 from ainemo.core.validators.length import LengthBudgetValidator
 from ainemo.core.validators.placeholder import PlaceholderParityValidator
 from ainemo.providers._ids import (
+    PROVIDER_ID_ANTHROPIC,
     PROVIDER_ID_NLLB,
     PROVIDER_ID_NOOP,
     PROVIDER_ID_OPENAI,
@@ -76,6 +77,7 @@ _PROVIDER_CHOICES: Final = (
     PROVIDER_ID_NLLB,
     PROVIDER_ID_OPUS,
     PROVIDER_ID_OPENAI,
+    PROVIDER_ID_ANTHROPIC,
 )
 
 
@@ -145,7 +147,7 @@ def register_translate(
             "Translation provider to use. ``noop`` (default) echoes the "
             "source text and exercises the pipeline without any model. "
             "``nllb`` and ``opus`` are local; ``openai`` requires "
-            "OPENAI_API_KEY."
+            "OPENAI_API_KEY; ``anthropic`` requires ANTHROPIC_API_KEY."
         ),
     )
     parser.add_argument(
@@ -346,6 +348,10 @@ def _build_provider(provider_id: str) -> Provider:
         from ainemo.providers.openai.openai_provider import OpenAIProvider
 
         return OpenAIProvider()
+    if provider_id == PROVIDER_ID_ANTHROPIC:
+        from ainemo.providers.anthropic.anthropic_provider import AnthropicProvider
+
+        return AnthropicProvider()
     raise ValueError(f"Unknown provider id: {provider_id!r}. Known ids: {list(_PROVIDER_CHOICES)}.")
 
 

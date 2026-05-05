@@ -36,6 +36,7 @@ dependencies = [
     "sacremoses",
     "sentencepiece",
     "openai",
+    "anthropic>=0.40",
     # Cycle 1 — Foundation: bundle adapters and translation memory.
     "polib>=1.2",                # gettext .po reading/writing
     "lxml>=5.0",                 # XLIFF 2.0 read/write
@@ -107,6 +108,7 @@ module = [
     "sacremoses",
     "sentencepiece",
     "openai.*",
+    "anthropic.*",
     "flask.*",
     "polib",
     "lxml.*",
