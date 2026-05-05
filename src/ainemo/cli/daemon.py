@@ -65,6 +65,7 @@ ERROR_KEY_MESSAGE: Final = "message"
 # plugin's IPC contract pins these strings.
 OP_PING: Final = "ping"
 OP_TRANSLATE: Final = "translate"
+OP_TRANSLATE_FILE: Final = "translate_file"
 
 # Error codes — the Gradle plugin pattern-matches on ``error.code``
 # strings rather than message text; codes are stable, messages can
@@ -83,6 +84,20 @@ PARAM_SOURCE_TEXT: Final = "source_text"
 PARAM_SOURCE_LANG: Final = "source_lang"
 PARAM_TARGET_LANG: Final = "target_lang"
 PARAM_PROVIDER: Final = "provider"
+
+# translate_file-op param keys.
+PARAM_SOURCE_PATH: Final = "source_path"
+PARAM_TARGET_LANGS: Final = "target_langs"
+PARAM_OUTPUT_DIR: Final = "output_dir"
+PARAM_FORMAT: Final = "format"
+PARAM_TM_PATH: Final = "tm_path"
+
+# translate_file-op result keys.
+RESULT_TARGET_LANG_PATHS: Final = "target_lang_paths"
+RESULT_TM_HIT_COUNT: Final = "tm_hit_count"
+RESULT_PROVIDER_CALL_COUNT: Final = "provider_call_count"
+RESULT_ERROR_COUNT: Final = "error_count"
+RESULT_WARNING_COUNT: Final = "warning_count"
 
 # Translate-op result keys.
 RESULT_TARGET_TEXT: Final = "target_text"
@@ -267,6 +282,93 @@ class DaemonServer:
         result = router.translate(segment, target_lang)
         return _provider_result_to_dict(result)
 
+    def _op_translate_file(self, params: Mapping[str, Any]) -> dict[str, Any]:
+        """Translate a whole bundle file through the cycle-1 pipeline.
+
+        This is the headline op for the cycle-2 Gradle plugin: the
+        plugin spawns one daemon, then invokes ``translate_file`` once
+        per target-language batch, amortizing model load across the
+        whole build. Implementation delegates to the same
+        :class:`TranslationPipeline` the CLI uses, so behavior matches
+        ``nemo translate`` exactly.
+        """
+        source_path_raw = params.get(PARAM_SOURCE_PATH)
+        target_langs_raw = params.get(PARAM_TARGET_LANGS)
+        output_dir_raw = params.get(PARAM_OUTPUT_DIR)
+        provider_id = params.get(PARAM_PROVIDER)
+        source_lang = params.get(PARAM_SOURCE_LANG, "en-US")
+        format_id_raw = params.get(PARAM_FORMAT)
+        tm_path_raw = params.get(PARAM_TM_PATH)
+
+        if not isinstance(source_path_raw, str) or not source_path_raw:
+            raise _DaemonRequestError(
+                code=ERR_INVALID_PARAMS,
+                message=f"translate_file requires non-empty string {PARAM_SOURCE_PATH!r}",
+            )
+        if not isinstance(target_langs_raw, list) or not target_langs_raw:
+            raise _DaemonRequestError(
+                code=ERR_INVALID_PARAMS,
+                message=f"translate_file requires non-empty list {PARAM_TARGET_LANGS!r}",
+            )
+        target_langs = tuple(str(lang) for lang in target_langs_raw)
+        if not isinstance(output_dir_raw, str) or not output_dir_raw:
+            raise _DaemonRequestError(
+                code=ERR_INVALID_PARAMS,
+                message=f"translate_file requires non-empty string {PARAM_OUTPUT_DIR!r}",
+            )
+        if not isinstance(provider_id, str) or not provider_id:
+            raise _DaemonRequestError(
+                code=ERR_INVALID_PARAMS,
+                message=f"translate_file requires non-empty string {PARAM_PROVIDER!r}",
+            )
+
+        # Local imports keep the module's import-time cheap and avoid
+        # pulling adapter/pipeline deps unless this op is actually
+        # called.
+        from ainemo.cli.commands import _build_validators, _resolve_adapter
+        from ainemo.core.pipeline import TranslationPipeline
+        from ainemo.core.tm.sqlite import DEFAULT_TM_PATH, SqliteTranslationMemory
+
+        source_path = Path(source_path_raw)
+        if not source_path.exists():
+            raise _DaemonRequestError(
+                code=ERR_INVALID_PARAMS,
+                message=f"source_path does not exist: {source_path}",
+            )
+        format_id: str | None = format_id_raw if isinstance(format_id_raw, str) else None
+        adapter = _resolve_adapter(format_id, source_path)
+        tm_path = (
+            Path(tm_path_raw) if isinstance(tm_path_raw, str) and tm_path_raw else DEFAULT_TM_PATH
+        )
+        output_dir = Path(output_dir_raw)
+
+        router = self._get_or_build_router(provider_id)
+        validators = _build_validators(forbidden_terms=[])
+        tm = SqliteTranslationMemory(tm_path)
+        try:
+            pipeline = TranslationPipeline(
+                adapter=adapter,
+                tm=tm,
+                provider=router,
+                validators=validators,
+                target_langs=target_langs,
+                source_lang=str(source_lang),
+                strict=False,
+            )
+            result = pipeline.translate_file(source_path, output_dir)
+        finally:
+            tm.close()
+
+        return {
+            RESULT_TARGET_LANG_PATHS: {
+                lang: str(path) for lang, path in result.target_lang_paths.items()
+            },
+            RESULT_TM_HIT_COUNT: result.tm_hit_count,
+            RESULT_PROVIDER_CALL_COUNT: result.provider_call_count,
+            RESULT_ERROR_COUNT: result.error_count,
+            RESULT_WARNING_COUNT: result.warning_count,
+        }
+
     def _get_or_build_router(self, provider_id: str) -> ProviderRouter:
         cached = self._routers.get(provider_id)
         if cached is not None:
@@ -335,6 +437,7 @@ def _provider_result_to_dict(result: ProviderResult) -> dict[str, Any]:
 _HANDLERS: dict[str, Callable[["DaemonServer", Mapping[str, Any]], dict[str, Any]]] = {
     OP_PING: DaemonServer._op_ping,
     OP_TRANSLATE: DaemonServer._op_translate,
+    OP_TRANSLATE_FILE: DaemonServer._op_translate_file,
 }
 
 
