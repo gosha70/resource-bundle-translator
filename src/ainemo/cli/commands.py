@@ -33,6 +33,7 @@ from ainemo.providers._ids import (
     PROVIDER_ID_ANTHROPIC,
     PROVIDER_ID_NLLB,
     PROVIDER_ID_NOOP,
+    PROVIDER_ID_OLLAMA,
     PROVIDER_ID_OPENAI,
     PROVIDER_ID_OPUS,
 )
@@ -78,6 +79,7 @@ _PROVIDER_CHOICES: Final = (
     PROVIDER_ID_OPUS,
     PROVIDER_ID_OPENAI,
     PROVIDER_ID_ANTHROPIC,
+    PROVIDER_ID_OLLAMA,
 )
 
 
@@ -147,7 +149,9 @@ def register_translate(
             "Translation provider to use. ``noop`` (default) echoes the "
             "source text and exercises the pipeline without any model. "
             "``nllb`` and ``opus`` are local; ``openai`` requires "
-            "OPENAI_API_KEY; ``anthropic`` requires ANTHROPIC_API_KEY."
+            "OPENAI_API_KEY; ``anthropic`` requires ANTHROPIC_API_KEY; "
+            "``ollama`` requires a running Ollama daemon (OLLAMA_HOST or "
+            "the localhost:11434 default)."
         ),
     )
     parser.add_argument(
@@ -352,6 +356,10 @@ def _build_provider(provider_id: str) -> Provider:
         from ainemo.providers.anthropic.anthropic_provider import AnthropicProvider
 
         return AnthropicProvider()
+    if provider_id == PROVIDER_ID_OLLAMA:
+        from ainemo.providers.ollama.ollama_provider import OllamaProvider
+
+        return OllamaProvider()
     raise ValueError(f"Unknown provider id: {provider_id!r}. Known ids: {list(_PROVIDER_CHOICES)}.")
 
 
