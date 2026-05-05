@@ -2,14 +2,14 @@
 
 **Networked Engine for Multilingual Ontologies** — knowledge-graph-grounded terminology and localization for software, with versioned domain packs and CC0/CC-BY ontology integrations. Distributed under the **egoge.com** namespace alongside [AI-ATLAS](https://github.com/gosha70/ai-atlas).
 
-> **Status**: pre-release. Cycle 0 (rebrand & stabilize) **shipped** 2026-05-03 — see the [retrospective](specs/retros/cycle-0.md). Cycle 1 (foundation: adapters + translation memory + validators) **shipped** — four bundle adapters, SQLite TM with embedding-based fuzzy lookup, four validators, end-to-end pipeline, and the `nemo` CLI now ship. Cycle 2 (provider abstraction + Gradle plugin — bringing real-LLM translation online via daemon-mode IPC) is shaped and queued. See [`specs/ROADMAP.md`](specs/ROADMAP.md) for the full plan and [`specs/pitches/`](specs/pitches/) for individual cycles.
+> **Status**: pre-release. Cycles 0–2 **shipped**. Cycle 0 (rebrand & stabilize) shipped 2026-05-03 — see the [retrospective](specs/retros/cycle-0.md). Cycle 1 (foundation: adapters + translation memory + validators) shipped 2026-05-03 — four bundle adapters, SQLite TM with embedding-based fuzzy lookup, four validators, end-to-end pipeline, and the `nemo` CLI. Cycle 2 (provider abstraction + Gradle plugin) shipped 2026-05-05 — `Provider` Protocol with NLLB / OPUS / OpenAI / **Anthropic Claude** / **Ollama** backends behind a cost/latency-tracked `ProviderRouter`, `~/.ainemo/usage.jsonl` UsageLog, `nemo daemon` JSON-over-stdio IPC, and the `com.egoge.ai.nemo.translate` Gradle plugin — see the [retrospective](specs/retros/cycle-2.md) and the [post-cycle cooldown report](specs/retros/cooldown-after-02.md). Cycle 3 (concept-oriented termbase via Kuzu) is the next ROADMAP bet. See [`specs/ROADMAP.md`](specs/ROADMAP.md) for the full plan and [`specs/pitches/`](specs/pitches/) for individual cycles.
 
 ## What this is
 
 AI-NEMO localizes software resource bundles (`.properties`, JSON, `.po`, XLIFF) using LLMs while:
 
 - **Preserving placeholders.** `{0}`, `{name}`, ICU `{count, plural, ...}` are extracted, tokenized, translated around, and restored. Validators block any output that drops or mangles a placeholder.
-- **Caching with a translation memory.** Re-running on an unchanged file is a no-op for the LLM — translations come from a SQLite-backed TM with embedding-based fuzzy lookup. Cycle 1 introduces this layer.
+- **Caching with a translation memory.** Re-running on an unchanged file is a no-op for the LLM — translations come from a SQLite-backed TM with embedding-based fuzzy lookup. Cycle-2 lookups are scoped to the requested provider so a `--provider noop` run does not satisfy a later `--provider openai` run.
 - **Eventually, grounding terms in a knowledge graph.** Cycle 3+ replaces the flat glossary with a Kuzu-backed concept-oriented termbase plus version-pinned domain packs (legal, medical, aerospace) anchored to Wikidata, EuroVoc, IATE, AGROVOC, MeSH, and friends. The KG is the moat — see [§ Strategic positioning in the roadmap](specs/ROADMAP.md#strategic-positioning).
 
 ## Closest projects to differentiate against
@@ -34,7 +34,7 @@ This installs the package in editable mode plus the dev tooling (`ruff`, `mypy`,
 
 ### CLI
 
-The `nemo` console script ships three subcommands as of cycle 1.
+The `nemo` console script ships five subcommands as of cycle 2.
 
 ```bash
 # Translate a source bundle to one or more target languages.
@@ -42,50 +42,58 @@ nemo translate \
   --from messages_en_US.properties \
   --to-langs de-DE,fr-FR,es-ES \
   --output-dir ./.ainemo/output \
+  [--from-lang en-US] \
   [--format java-properties|i18next-json|gettext-po|xliff-2] \
+  [--provider noop|nllb|opus|openai|anthropic|ollama] \
   [--tm-path ./.ainemo/tm.sqlite] \
+  [--usage-log ~/.ainemo/usage.jsonl] \
   [--strict] \
   [--forbidden-term BrandX]…
 
 # Inspect the local translation memory.
 nemo tm stats --tm-path ./.ainemo/tm.sqlite
 
-# Re-run cycle-1 validators on an existing source/target pair.
+# Re-run validators on an existing source/target pair.
 nemo validate \
   --source messages_en_US.properties \
   --target messages_de_DE.properties \
   --to-lang de-DE
+
+# List registered providers and their environment availability.
+nemo provider list
+
+# Aggregate the per-call usage log (calls, tokens, latency, USD cost).
+nemo provider stats [--usage-log PATH] [--since 2026-05-01]
+
+# Run a long-lived JSON-over-stdio daemon (used by the Gradle plugin).
+nemo daemon [--usage-log PATH]
 ```
 
-`nemo translate` infers the bundle format from the source path's extension; pass `--format` to override. See [`docs/adapters.md`](docs/adapters.md) for the format → adapter table and per-format limitations.
+`nemo translate` infers the bundle format from the source path's extension; pass `--format` to override. See [`docs/adapters.md`](docs/adapters.md) for the format → adapter table and [`docs/providers.md`](docs/providers.md) for per-provider prereqs, default models, env vars (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OLLAMA_HOST`), and cost tracking.
 
-> **Cycle-1 caveat**: the CLI ships with a `_NoOpProvider` that returns source text unchanged. The full pipeline runs end-to-end (parse → TM → validators → serialize) on real files and surfaces TM cache hits on second runs, but real-LLM translation against NLLB/OpenAI/Anthropic/Ollama lands in cycle 2 with the provider router and `nemo daemon`. Use cycle 1 to validate the plumbing on your bundles; wait for cycle 2 to translate against a live model.
+The default `--provider noop` echoes source text unchanged, so the pipeline (parse → TM → provider → validators → serialize) runs offline without any model. Switch to `nllb` / `opus` / `openai` / `anthropic` / `ollama` when you want real translations. Every provider call routes through `ProviderRouter` and records to the UsageLog (`~/.ainemo/usage.jsonl` by default), even on noop runs — uniform cost surveillance is the cycle-2 contract.
 
-### Flask app (admin / reviewer surface)
+### Gradle plugin
+
+```kotlin
+// build.gradle.kts
+plugins {
+    id("com.egoge.ai.nemo.translate") version "0.1.0"
+}
+
+aiNemoTranslate {
+    sourceFile.set(file("src/main/resources/messages_en_US.properties"))
+    sourceLanguage.set("en-US")
+    targetLanguages.set(listOf("de-DE", "fr-FR", "ja-JP"))
+    provider.set("openai")
+}
+```
 
 ```bash
-python -m ainemo.app.translator_app --port 5001
+./gradlew translateBundles
 ```
 
-Reads `src/ainemo/config/translation_config.json` for the source/target language list and glossary. The app exposes `POST /translate`:
-
-```bash
-curl -X POST http://localhost:5001/translate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "messages": ["Hello world!", "This is a test text."],
-    "to_languages": ["fr_FR", "iw"]
-  }'
-```
-
-CLI flags accepted by `translator_app`:
-
-| Flag | Description | Default |
-|---|---|---|
-| `--port` | HTTP port for the Flask app | `5001` |
-| `--from_lang` | BCP-47 source language | `en_US` |
-| `--to_langs` | Space-separated list of target languages (defaults to all supported except source) | `None` |
-| `--model_name` | Translation backend: `nllb`, `opus`, `openai` | `nllb` |
+The plugin spawns one `nemo daemon` subprocess per task run, batches all configured target languages into one `translate_file` op, and amortizes model load + SDK init across the whole build. See [`docs/gradle-plugin.md`](docs/gradle-plugin.md) for the full DSL reference, the JSON-over-stdio IPC contract, build instructions (Gradle wrapper bootstrap deferred to cycle-3 cooldown), and troubleshooting. JDK 17+ required.
 
 ## Supported languages
 
@@ -113,17 +121,22 @@ AI-NEMO inherits the language set from the prototype it descends from:
 | `tr` | Turkish |
 | `zh_CN` / `zh_HK` | Chinese (Mandarin) |
 
-Cycle 1 expands format coverage (i18next JSON, gettext `.po`, XLIFF 2.0) on top of the existing `.properties` support.
+Cycle 1 expanded format coverage (i18next JSON, gettext `.po`, XLIFF 2.0) on top of the original `.properties` support.
 
-## Translation models
+## Translation providers
 
-| Backend | Type | Notes |
-|---|---|---|
-| **NLLB-200** | Local (Facebook) | Default; broadest language coverage. See [the NLLB README](https://github.com/facebookresearch/flores/blob/main/flores200/README.md#languages-in-flores-200). |
-| **OPUS / Marian** | Local (Helsinki-NLP) | Strong on European languages; weaker on Thai, Turkish, etc. |
-| **OpenAI** | Managed | Calls `https://api.openai.com/v1/chat/completions`. Set `OPENAI_API_KEY` in the environment. |
+Cycle 2 finalized the `Provider` Protocol: every backend implements `translate(segment, target_lang) -> ProviderResult` and `supports(source_lang, target_lang) -> bool`. `ProviderResult` carries `target_text`, `provider`, `model`, `input_tokens`, `output_tokens`, `latency_ms`, `cost_usd`, and `confidence`. Every call goes through `ProviderRouter`, which records to `~/.ainemo/usage.jsonl` and applies optional retry + exponential backoff via `with_retry`.
 
-Cycle 2 finalizes the `Provider` Protocol: every concrete backend implements `translate(segment, target_lang) -> ProviderResult` and `supports(source_lang, target_lang) -> bool`. `ProviderResult` carries `target_text`, `model`, `input_tokens`, `output_tokens`, `latency_ms`, `cost_usd`, and `confidence`. The cycle-1 minimal `translate -> str` surface was a bridge during cycle 1; cycle-2 scope 1 replaced it. Cycle-2 also adds a `ProviderRouter` that records every call to `~/.ainemo/usage.jsonl`, retry + exponential backoff via `with_retry`, and brings Anthropic Claude and Ollama backends online.
+| Backend | Kind | Default model | Cost tracked | Status |
+|---|---|---|---|---|
+| `noop` | placeholder | — | no | always available |
+| `nllb` | local NMT | `facebook/nllb-200-distilled-600M` | no | always available |
+| `opus` | local NMT (OPUS-MT, English source only) | per-pair Helsinki-NLP model | no | always available |
+| `openai` | managed LLM | `gpt-4o-2024-11-20` | yes | needs `OPENAI_API_KEY` |
+| `anthropic` | managed LLM | `claude-sonnet-4-5-20250929` | yes | needs `ANTHROPIC_API_KEY` |
+| `ollama` | local LLM (HTTP) | `llama3.2` | no (local) | needs running daemon at `OLLAMA_HOST` (default `http://localhost:11434`) |
+
+All cloud providers run with `temperature=0` for reproducibility (per AGENTS.md § Architecture Rules). See [`docs/providers.md`](docs/providers.md) for per-provider prereqs, full pricing tables, supported language pairs, and the "adding a new provider" checklist.
 
 ## Development
 
@@ -134,7 +147,7 @@ mypy src/ainemo
 pytest --cov
 ```
 
-### Project layout (post-cycle-1)
+### Project layout (post-cycle-2)
 
 ```
 src/ainemo/
@@ -145,18 +158,29 @@ src/ainemo/
 │   ├── tm/                 # SqliteTranslationMemory + base Protocol
 │   ├── validators/         # placeholder, ICU, length, forbidden
 │   └── pipeline.py         # TranslationPipeline orchestrator
-├── providers/              # cycle-1 Provider Protocol + legacy ABC; cycle 2 adds router + Anthropic + Ollama
-├── cli/                    # `nemo` translate / tm / validate subcommands
-├── app/                    # Flask reviewer + admin (cycle 5 expands)
-├── config/                 # configuration loaders, persona templates
-├── utils/                  # git inspection, logging setup
-└── _legacy/                # pre-cycle-0 data modules — DELETED in cycle 2 cooldown
+├── providers/
+│   ├── base.py             # Provider Protocol + ProviderResult
+│   ├── router.py           # ProviderRouter — cost/latency-tracked façade
+│   ├── _ids.py             # PROVIDER_ID_* constants
+│   ├── _usage_log.py       # ~/.ainemo/usage.jsonl writer + stats
+│   ├── _retry.py           # with_retry exponential backoff
+│   ├── nllb/               # facebook/nllb-200-distilled-600M
+│   ├── opus/               # Helsinki-NLP OPUS-MT (per-pair)
+│   ├── openai/             # gpt-4o-2024-11-20 (default)
+│   ├── anthropic/          # claude-sonnet-4-5-20250929 (default)
+│   └── ollama/             # llama3.2 (default), local HTTP
+└── cli/
+    ├── commands.py         # translate / tm / validate / provider
+    └── daemon.py           # nemo daemon — JSON-over-stdio
+gradle-plugin/              # com.egoge.ai.nemo.translate Kotlin plugin
+├── src/main/kotlin/...     # AiNemoTranslatePlugin, TranslateBundlesTask, DaemonClient
+└── src/{test,functionalTest}/  # JUnit5 + Gradle TestKit
 tests/
-├── unit/                   # fast, isolated (~210 cases as of cycle 1)
+├── unit/                   # fast, isolated (cycle-2: 371 cases)
 ├── e2e/                    # full pipeline against real bundle fixtures
-└── benchmarks/             # opt-in TM throughput benchmarks (`pytest -m benchmark`)
-docs/                       # adapter, TM, validator references
-specs/                      # SDD + Shape-Up artifacts (pitches, ROADMAP, retros, ADRs)
+└── benchmarks/             # opt-in throughput / cost benchmarks (`pytest -m benchmark`)
+docs/                       # adapters, TM, validators, providers, gradle-plugin
+specs/                      # SDD + Shape-Up artifacts (pitches, ROADMAP, retros, cooldown reports)
 scratch/                    # experimental scripts kept for reference; not run by pytest
 ```
 
@@ -168,22 +192,11 @@ Development cadence is documented in [`specs/README.md`](specs/README.md). Each 
 |---|---|---|
 | 0 | [Rebrand & Stabilize](specs/pitches/0000-rebrand-stabilize/pitch.md) | shipped — see [retro](specs/retros/cycle-0.md) |
 | 1 | [Foundation: Adapters + TM + Validators](specs/pitches/0001-foundation/pitch.md) | shipped — adapters + TM + validators + pipeline + CLI all in `src/ainemo/core/` |
-| 2 | [Provider Abstraction + Gradle Plugin](specs/pitches/0002-providers-gradle/pitch.md) | shaped (next bet) |
+| 2 | [Provider Abstraction + Gradle Plugin](specs/pitches/0002-providers-gradle/pitch.md) | shipped — see [retro](specs/retros/cycle-2.md) and [cooldown report](specs/retros/cooldown-after-02.md) |
+| 3 | Concept-Oriented Termbase via Kuzu | next ROADMAP bet — pitch shaping during cooldown |
 
 Future cycles (Kuzu termbase, domain packs, reviewer UI, multi-platform expansion) are sketched in [`specs/ROADMAP.md`](specs/ROADMAP.md) but re-shaped before each betting table.
 
 ## License
 
 GPL-3.0-or-later (inherited from the prototype). Final license decision before public release: see [`specs/ROADMAP.md` § Risks](specs/ROADMAP.md#risks--open-questions-for-the-program).
-
-## Legacy invocations
-
-The pre-cycle-0 prototype documented these CLI entry points. They were renamed during cycle 0's reorganization; calls to the old paths will fail with `ModuleNotFoundError`. New paths:
-
-| Old | New |
-|---|---|
-| `python -m cli.resource_bundle_generator --from_file ... --to_langs ...` | `python -m ainemo.cli.resource_bundle_generator --from_file ... --to_langs ...` |
-| `python -m cli.resource_bundle_git --repo_path ... --model_name nllb --to_lang iw` | `python -m ainemo.cli.resource_bundle_git --repo_path ... --model_name nllb --to_lang iw` |
-| `python -m app.translator_app` | `python -m ainemo.app.translator_app` |
-
-Cycle 1 ships `nemo translate` as the going-forward CLI (see § Usage). The legacy `python -m ainemo.cli.resource_bundle_*` invocations still work for backward compat through cycle 2; the cycle-0 deprecation shims at the repository root (`languages.py`, `translation.py`, `translation_request.py`, `translation_service.py`) delete during cycle 2's cooldown when the provider router migration is done.
