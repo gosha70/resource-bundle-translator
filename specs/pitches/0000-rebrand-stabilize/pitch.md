@@ -1,4 +1,19 @@
+---
+pitch_id: 0000-rebrand-stabilize
+title: "Cycle 0 — Rebrand & Stabilize"
+appetite: 2w
+bet_status: shipped
+cycle: "00"
+circuit_breaker: "If the src/ package reorg or any audit-bug fix is still uphill at 2w, ship the rebrand + CI matrix only and shelve the leftover into cycle 1's foundation work."
+shaped_by: gosha70
+shaped_date: 2026-05-02
+---
+
 # Cycle 0 — Rebrand & Stabilize
+
+<!-- Human-readable header. Authoritative status / dates are in the YAML
+     frontmatter above; this list is for at-a-glance reference and stays
+     load-bearing in cross-links from the README and ROADMAP. -->
 
 - **ID**: 0000
 - **Appetite**: 2w (wall-clock ceiling; actual execution ≪ appetite)

@@ -1,4 +1,19 @@
+---
+pitch_id: 0002-providers-gradle
+title: "Cycle 2 — Provider Abstraction + Gradle Plugin"
+appetite: 6w
+bet_status: shipped
+cycle: "02"
+circuit_breaker: "If Half B (Gradle plugin — scopes 10–13) is still uphill at week 4, ship Half A (provider migration + UsageLog + nemo daemon) only and shelve the Gradle plugin into cycle 6's multi-platform expansion."
+shaped_by: gosha70
+shaped_date: 2026-05-03
+---
+
 # Cycle 2 — Provider Abstraction + Gradle Plugin
+
+<!-- Human-readable header. Authoritative status / dates are in the YAML
+     frontmatter above; this list is for at-a-glance reference and stays
+     load-bearing in cross-links from the README and ROADMAP. -->
 
 - **ID**: 0002
 - **Appetite**: 6w (wall-clock ceiling; actual session execution ≪ appetite)

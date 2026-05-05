@@ -1,4 +1,19 @@
+---
+pitch_id: 0001-foundation
+title: "Cycle 1 — Foundation: Adapters + Translation Memory + Validators"
+appetite: 6w
+bet_status: shipped
+cycle: "01"
+circuit_breaker: "If a bundle adapter's contract test isn't passing by week 4, ship the other adapters and shelve the failing one for cycle 2; if the embedding-based fuzzy TM hasn't met its p95 latency target by week 5, ship exact-match-only and defer fuzzy lookup to cycle 3."
+shaped_by: gosha70
+shaped_date: 2026-05-02
+---
+
 # Cycle 1 — Foundation: Adapters + Translation Memory + Validators
+
+<!-- Human-readable header. Authoritative status / dates are in the YAML
+     frontmatter above; this list is for at-a-glance reference and stays
+     load-bearing in cross-links from the README and ROADMAP. -->
 
 - **ID**: 0001
 - **Appetite**: 6w (wall-clock ceiling; actual session execution ≪ appetite)

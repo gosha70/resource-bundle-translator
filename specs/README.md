@@ -34,15 +34,35 @@ A solo or small-team project can compress this — but the *order* (shape → be
 
 ## Spec structure
 
-Each pitch in `pitches/` follows this template:
+Each pitch in `pitches/` is a `pitch.md` with **YAML frontmatter** (the validator's source of truth) plus a **Markdown body** (the human-readable pitch). The full template lives at [`pitch-template.md`](pitch-template.md); copy it for new pitches.
+
+The frontmatter is what `~/.claude/templates/sdd/validate-pitch.sh` checks against on every cycle close:
+
+```yaml
+---
+pitch_id: NNNN-slug          # must match the directory name
+title: "..."
+appetite: 2w | 4w | 6w
+bet_status: shaping | shaped | bet | building | shipped | shelved
+cycle: ""                    # required when bet_status ∈ {bet, building, shipped}
+circuit_breaker: "..."       # required when bet_status ∈ {shaped, bet, building, shipped, shelved}
+shaped_by: "author"
+shaped_date: YYYY-MM-DD
+---
+```
+
+The body follows this section structure:
 
 ```markdown
-# <Title>
+# <Cycle N — Title>
+
+<!-- Human-readable header. Authoritative status / dates live in the YAML
+     frontmatter above; this list is what the README + ROADMAP cross-link to. -->
 
 - **ID**: NNNN
-- **Appetite**: 2w | 4w | 6w
-- **Status**: shaping | shaped | bet | building | shipped | shelved
-- **Owner**:
+- **Appetite**: ...
+- **Status**: ...
+- **Owner**: ...
 
 ## Problem
 <2–4 paragraphs. Concrete, with examples. Why now.>
@@ -51,7 +71,9 @@ Each pitch in `pitches/` follows this template:
 <Rough sketch. Prose + fat-marker diagrams. NOT a detailed design.>
 
 ### Interfaces (SDD layer)
-<Public API contracts the implementation must satisfy. File paths, function signatures, schema sketches. Detailed enough that the build is a mechanical translation.>
+<Public API contracts the implementation must satisfy. File paths, function
+signatures, schema sketches. Detailed enough that the build is a mechanical
+translation.>
 
 ### Data model
 <If applicable. Schema diagrams or DDL sketches.>
@@ -63,14 +85,33 @@ Each pitch in `pitches/` follows this template:
 <Out of scope. Explicit list.>
 
 ## Scopes
-<3–7 vertical slices, each shippable in 1–3 days. These become the hill-chart items.>
+<3–7 vertical slices, each shippable in a session-execution chunk
+(per AI-NEMO memory rule "Calibrate estimates for Claude Code, not human-days").
+These become the hill-chart items.>
 
 ## Test strategy
-<What does "done" mean? Unit / integration / contract / manual. Concrete acceptance criteria.>
+<What does "done" mean? Unit / integration / contract / manual. Concrete
+acceptance criteria. AI-NEMO convention: ruff + mypy strict + pytest on the
+3.10/3.11/3.12 matrix.>
 
 ## Open questions
-<Resolve before betting. After betting, no new questions allowed.>
+<Resolve before betting. After betting, no new questions allowed.
+Per AI-NEMO memory rule "Pre-resolve from project docs before asking the user":
+search CLAUDE.md / AGENTS.md / specs/ROADMAP.md first.>
+
+## Circuit breaker
+<Concrete trigger and action — mirror frontmatter, add 1–2 sentences of
+context on which scopes are core vs. trim-able.>
 ```
+
+### Validation
+
+```bash
+bash ~/.claude/templates/sdd/validate-pitch.sh --all          # validate every pitch
+bash ~/.claude/templates/sdd/validate-pitch.sh --pitch-id 0002-providers-gradle
+```
+
+The validator enforces required frontmatter fields, the appetite/bet_status enums, and the conditional `cycle` / `circuit_breaker` rules. CI does not (yet) run this on every PR — cooldown after each cycle pins the validator pass.
 
 ## How specs and code coexist
 
@@ -88,17 +129,21 @@ This is what makes it Spec-Driven: the spec is part of the artifact, not a throw
 specs/
 ├── README.md                            (this file — methodology)
 ├── ROADMAP.md                           (master Shape-Up roadmap, all cycles)
+├── pitch-template.md                    (canonical pitch skeleton — copy for new pitches)
 ├── pitches/
 │   └── <NNNN-slug>/                     (one directory per pitch)
-│       ├── pitch.md                     (problem, solution shape, scopes, no-gos — required)
-│       ├── plan.md                      (build-phase implementation plan — optional, added after betting)
+│       ├── pitch.md                     (YAML frontmatter + problem/scopes/no-gos — required)
+│       ├── plan.md                      (build-phase implementation plan — optional)
 │       ├── spec.md                      (deeper SDD spec if pitch.md interfaces aren't enough — optional)
 │       ├── tasks.md                     (task breakdown for scope-executor — added during build)
 │       └── hill.json                    (hill-chart state per scope — created on /cycle-start)
+├── retros/
+│   ├── cycle-NN.md                      (per-cycle retrospective — written by cycle-retro agent)
+│   └── cooldown-after-NN.md             (cooldown report — written by cooldown-report agent)
 └── adr/                                 (architecture decision records, created as decisions are made)
 ```
 
-Cycle 1 lives at `pitches/0001-foundation/pitch.md`. Future cycles (0002 — providers + Gradle, 0003 — Kuzu termbase, 0004 — domain pack legal-en, 0005 — reviewer UI, 0006 — multi-platform) will be shaped during cooldowns and land under their own `pitches/<NNNN-slug>/` directories.
+Cycles 0–2 are shipped (`pitches/0000-rebrand-stabilize`, `pitches/0001-foundation`, `pitches/0002-providers-gradle`). Cycle 3 (`0003-*`) is the next ROADMAP target; future cycles (0004 — domain pack legal-en, 0005 — reviewer UI, 0006 — multi-platform) will be shaped during cooldowns and land under their own `pitches/<NNNN-slug>/` directories.
 
 ## See also
 
