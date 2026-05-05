@@ -342,24 +342,63 @@ stderr to a file via the venv-launch shell:
 nemo daemon 2>>nemo-daemon.log
 ```
 
+### `NoSuchFileException: …/lib/gradle-runtime-api-info-8.10.jar`
+
+You're hitting a stale Gradle daemon registered against a Gradle
+install that was deleted out from under it. Common when the
+wrapper is bootstrapped from a one-off Gradle install in `/tmp`
+that gets cleaned up after; the daemon registry under
+`~/.gradle/daemon/8.10/` keeps a pointer to the now-gone path
+and `./gradlew` happily reuses it.
+
+Fix:
+
+```bash
+# from gradle-plugin/
+./gradlew --stop                       # kill any lingering daemons
+rm -rf .gradle build                   # clear local Gradle state
+./gradlew check                        # next run starts a fresh daemon
+```
+
+The wrapper in this repo points at the official
+`services.gradle.org/distributions/gradle-8.10-bin.zip` and
+re-downloads the distribution into `~/.gradle/wrapper/dists/` on
+first use, so the daemon will register against a stable path going
+forward. You should only ever hit this once, on a machine where
+the wrapper was bootstrapped from a since-deleted Gradle install.
+
 ---
 
-## Cycle-2 limitations (cooldown candidates)
+## Limitations carried forward
 
-These are explicit and tracked in
-`specs/retros/cycle-2.md` § "Carryover into cooldown":
+Tracked in [`specs/retros/cycle-2.md`](../specs/retros/cycle-2.md)
+and [`specs/retros/cooldown-after-02.md`](../specs/retros/cooldown-after-02.md).
 
-- No Gradle wrapper checked in; no CI workflow for the plugin.
-- `tmPath` and `usageLogPath` are typed `@InputFile` but the TM is
-  daemon-created and the log is an output — first-run / incremental
-  semantics need real `./gradlew check` exercise to confirm.
-- No payload-size ceiling on the daemon's stdin reader.
+**Resolved during cycle-2 cooldown** (commit `2672f21`):
+
+- ~~No Gradle wrapper checked in; no CI workflow for the plugin.~~
+  Wrapper bootstrapped (Gradle 8.10);
+  [`.github/workflows/gradle-plugin.yml`](../.github/workflows/gradle-plugin.yml)
+  runs `./gradlew check` on JDK 17 + 21 without requiring AI-NEMO
+  installed.
+- ~~`tmPath` and `usageLogPath` are typed `@InputFile` but the TM is
+  daemon-created and the log is an output.~~ Re-annotated
+  `@LocalState` and `@Internal` respectively;
+  `validatePlugins` accepts the new shape.
+
+**Deferred to post-cycle-3 or post-cycle-4 cooldown:**
+
+- No payload-size ceiling on the daemon's stdin reader. Needs a
+  config-knob discussion that's out of scope for the friction-only
+  cooldown.
 - Concurrency: the daemon is single-threaded; the Kotlin client's
   `AtomicLong` correlation-id counter is forward-looking.
+  Lock-vs-multi-threaded is a design call worth its own pitch.
 - Cross-language nullable drift: `DaemonClient` uses `as String`
-  casts on fields the daemon could in principle drop.
+  casts on fields the daemon could in principle drop. Audit
+  postponed until the new CI matrix surfaces what's actually
+  drifting in practice.
 
-The plugin is production-ready for the happy-path cycle-2 use
-case (one bundle, N target langs, one of the six providers) on
-macOS / Linux + JDK 17+. Cooldown closes the operational gaps
-before cycle 3.
+The plugin is **clone-and-go** for any external contributor on
+JDK 17+ as of cycle-2 cooldown. Cooldown closed the friction
+items; the deferred items are design calls for cycle-3+.

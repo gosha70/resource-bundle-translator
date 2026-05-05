@@ -64,17 +64,16 @@ abstract class TranslateBundlesTask : DefaultTask() {
      * use [org.gradle.api.tasks.OutputFile] either: that would
      * couple Gradle's clean / cache-management to a log file we
      * want to persist across builds for cycle-2 ``nemo provider
-     * stats`` aggregation. ``@Internal + @LocalState`` is the
-     * correct shape for "task-managed mutable state Gradle should
-     * leave alone."
+     * stats`` aggregation.
      */
+    // @Internal (not @OutputFile): persists across `./gradlew clean`
+    // for cross-build `nemo provider stats` aggregation.
     @get:Internal
     abstract val usageLogPath: RegularFileProperty
 
     /**
      * Translation-memory SQLite path. Created by the daemon on
-     * first run, read+written on every subsequent run. Same
-     * [Internal] + [LocalState] treatment as [usageLogPath]:
+     * first run, read+written on every subsequent run.
      *
      * - Not [InputFile]: the file does not need to exist before the
      *   task runs (Gradle would refuse to schedule the task), and
@@ -87,6 +86,9 @@ abstract class TranslateBundlesTask : DefaultTask() {
      * lives at ``./.ainemo/tm.sqlite`` and is opt-in for git
      * tracking.
      */
+    // @LocalState (not @InputFile/@OutputFile): task-managed state
+    // Gradle leaves alone — survives `./gradlew clean`, doesn't
+    // gate task scheduling on existence, doesn't bust the cache.
     @get:LocalState
     abstract val tmPath: RegularFileProperty
 

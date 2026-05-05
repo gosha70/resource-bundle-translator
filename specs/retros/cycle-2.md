@@ -12,6 +12,33 @@
 - **Branch**: `cycle-2/scope-5-provider-migration`
 - **PRs**: [#6](https://github.com/gosha70/resource-bundle-translator/pull/6) (merged — scopes 1–4), [#7](https://github.com/gosha70/resource-bundle-translator/pull/7) (in review — scopes 5–14)
 
+## Limitations cycle 2 shipped with — caught during cooldown verification
+
+The cooldown's real `./gradlew check` run exposed one cycle-2 false
+positive that the cycle's CI didn't catch. Calling it out here so
+future cycles audit "task ran how many tests?" rather than just
+"task was BUILD SUCCESSFUL."
+
+- **`useJUnitPlatform()` was missing on the unit `test` task.**
+  Cycle-2 set it on `functionalTest` only. The Gradle Test task
+  defaults to JUnit 4 / Vintage, which silently skips JUnit 5
+  `@Test` annotations. Result: throughout cycle 2, the unit
+  `test` task reported BUILD SUCCESSFUL with **0 tests run**.
+  `DaemonClientTest`'s 5 cases never executed in cycle 2 — every
+  PR #7 review note about that test ("subprocess-spawning",
+  "skips on JDK-only agents") described behavior that wasn't
+  actually happening because the test wasn't running at all. The
+  fix in cooldown commit `2672f21` adds
+  `tasks.withType<Test>().configureEach { useJUnitPlatform() }`
+  so both task types use the platform; locally verified the
+  unit suite now reports 5 tests (and the functional suite 2,
+  with `nemo` on PATH).
+
+  **Lesson for future plugin scopes' done-criteria**: confirm the
+  test task's reported count matches the source's `@Test` count,
+  not just that the task succeeded. Gradle has no built-in
+  warning for "task X executed and found zero tests."
+
 ## Carryover into cooldown
 
 Items surfaced during the cycle-2 self-review (PR #7) that are
