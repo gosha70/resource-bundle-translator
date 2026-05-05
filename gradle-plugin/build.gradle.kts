@@ -45,9 +45,13 @@ dependencies {
     // Switch to a more featureful parser only if benchmarks demand it.
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.18.2")
 
-    testImplementation(kotlin("test"))
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:2.1.0")
+    // ``kotlin("test-junit5")`` pulls in ``kotlin-test`` transitively
+    // and pre-configures the JUnit 5 backend, avoiding the capability
+    // conflict you get when adding ``kotlin("test")`` (which defaults
+    // to JUnit 4) alongside ``kotlin-test-junit5`` directly.
+    testImplementation(kotlin("test-junit5"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 // ---------------------------------------------------------------------------
@@ -70,11 +74,18 @@ val functionalTestImplementation: Configuration =
     configurations["functionalTestImplementation"].apply {
         extendsFrom(configurations["testImplementation"])
     }
+val functionalTestRuntimeOnly: Configuration =
+    configurations["functionalTestRuntimeOnly"].apply {
+        extendsFrom(configurations["testRuntimeOnly"])
+    }
 
 dependencies {
     functionalTestImplementation(gradleTestKit())
-    functionalTestImplementation("org.jetbrains.kotlin:kotlin-test-junit5:2.1.0")
+    // Same JUnit-5 wiring as the unit suite — ``kotlin("test-junit5")``
+    // resolves the kotlin-test-framework capability cleanly.
+    functionalTestImplementation(kotlin("test-junit5"))
     functionalTestImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    functionalTestRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 val functionalTest by tasks.registering(Test::class) {
@@ -82,6 +93,14 @@ val functionalTest by tasks.registering(Test::class) {
     group = "verification"
     testClassesDirs = sourceSets["functionalTest"].output.classesDirs
     classpath = sourceSets["functionalTest"].runtimeClasspath
+    useJUnitPlatform()
+}
+
+// Both the unit ``test`` task and the ``functionalTest`` task use
+// JUnit 5; without this every JUnit 5 ``@Test`` is silently skipped
+// because the default Test task runner is the JUnit 4 / Vintage
+// engine (which the JUnit 5 platform detects as no-op).
+tasks.withType<Test>().configureEach {
     useJUnitPlatform()
 }
 

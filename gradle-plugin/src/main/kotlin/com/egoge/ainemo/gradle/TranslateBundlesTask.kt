@@ -7,6 +7,8 @@ import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.LocalState
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.PathSensitive
@@ -53,14 +55,39 @@ abstract class TranslateBundlesTask : DefaultTask() {
     @get:Input
     abstract val providerExecutable: Property<String>
 
-    @get:InputFile
-    @get:Optional
-    @get:PathSensitive(PathSensitivity.RELATIVE)
+    /**
+     * JSONL path the daemon appends per-call usage records to. The
+     * file is an *output* of the task (the daemon writes; nothing
+     * reads it during the build), so it is annotated [Internal] —
+     * it is **not** part of the input fingerprint and the file's
+     * presence or absence does not gate task validation. We do not
+     * use [org.gradle.api.tasks.OutputFile] either: that would
+     * couple Gradle's clean / cache-management to a log file we
+     * want to persist across builds for cycle-2 ``nemo provider
+     * stats`` aggregation. ``@Internal + @LocalState`` is the
+     * correct shape for "task-managed mutable state Gradle should
+     * leave alone."
+     */
+    @get:Internal
     abstract val usageLogPath: RegularFileProperty
 
-    @get:InputFile
-    @get:Optional
-    @get:PathSensitive(PathSensitivity.RELATIVE)
+    /**
+     * Translation-memory SQLite path. Created by the daemon on
+     * first run, read+written on every subsequent run. Same
+     * [Internal] + [LocalState] treatment as [usageLogPath]:
+     *
+     * - Not [InputFile]: the file does not need to exist before the
+     *   task runs (Gradle would refuse to schedule the task), and
+     *   every successful run mutates it (busting the input cache for
+     *   every other consumer of the TM file).
+     * - Not [OutputFile]: the TM is persistent across builds; we
+     *   don't want ``./gradlew clean`` to delete it.
+     *
+     * Per AGENTS.md § Translation-Domain Conventions, the default
+     * lives at ``./.ainemo/tm.sqlite`` and is opt-in for git
+     * tracking.
+     */
+    @get:LocalState
     abstract val tmPath: RegularFileProperty
 
     @TaskAction

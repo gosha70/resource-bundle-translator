@@ -193,34 +193,35 @@ never takes down the daemon (cycle-2 invariant, explicitly tested).
 
 ## Building this module
 
-> **Bootstrap note (cycle-3 cooldown).** The repo currently ships
-> the plugin source but not a Gradle wrapper. On first build,
-> generate one with a system Gradle 8.5+ install:
->
-> ```bash
-> cd gradle-plugin
-> gradle wrapper --gradle-version 8.10
-> ./gradlew :gradle-plugin:check
-> ```
->
-> Cycle-3 cooldown commits the wrapper alongside a CI workflow
-> that runs `:gradle-plugin:check` on JDK 17 + 21. See
-> `specs/retros/cycle-2.md` § "Carryover into cooldown" #3.
+The plugin is a **standalone Gradle build** with its own wrapper
+(Gradle 8.10, bootstrapped in the cycle-2 cooldown). All build
+commands run from inside `gradle-plugin/`.
 
 ```bash
-./gradlew build              # compile + unit tests (DaemonClientTest)
-./gradlew functionalTest     # TestKit (spawns Gradle daemons + nemo)
-./gradlew check              # both
-./gradlew publishPlugins --dry-run  # validate publication metadata
+cd gradle-plugin
+./gradlew build               # compile + unit tests (DaemonClientTest)
+./gradlew functionalTest      # TestKit (spawns Gradle daemons + nemo)
+./gradlew check               # both — CI entry point
+./gradlew publishPlugins --dry-run   # validate publication metadata
 ```
 
-`functionalTest` requires `nemo` on PATH. Set up the venv first:
+CI runs `./gradlew check` on JDK 17 + 21 via
+[`.github/workflows/gradle-plugin.yml`](../.github/workflows/gradle-plugin.yml).
+The CI matrix does **not** install AI-NEMO; both
+`DaemonClientTest` (needs `python3`) and `AiNemoTranslatePluginFunctionalTest`
+(needs `nemo`) gate themselves with JUnit 5 `Assumptions.assumeTrue`
+and skip cleanly when the binaries aren't present. The rest of
+`check` (compile, plugin validation, publication metadata) runs
+unconditionally.
+
+To run the full `check` locally with no skips:
 
 ```bash
 # from repo root
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-which nemo  # confirm before running TestKit
+which nemo                    # confirm both python3 and nemo present
+cd gradle-plugin && ./gradlew check
 ```
 
 ---

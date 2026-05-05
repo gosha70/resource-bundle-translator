@@ -57,23 +57,34 @@ across all configured target languages.
 
 ## Building this module
 
-> **Bootstrap note:** the repo currently ships the plugin source but
-> not a Gradle wrapper. On first build, generate one with a system
-> Gradle 8.5+ install:
->
-> ```bash
-> cd gradle-plugin
-> gradle wrapper --gradle-version 8.10
-> ./gradlew :gradle-plugin:check
-> ```
->
-> Cycle-3 cooldown will commit the wrapper alongside a CI workflow
-> that runs `:gradle-plugin:check` on JDK 17 + 21.
+The plugin is a **standalone Gradle build** with its own wrapper.
+Cycle-2 cooldown bootstrapped the wrapper (Gradle 8.10) and pinned
+the build invocations as below — note that all commands run from
+within `gradle-plugin/` because the wrapper is here, not at the
+repo root.
 
 ```bash
-./gradlew :gradle-plugin:build              # compile + unit tests
-./gradlew :gradle-plugin:functionalTest     # TestKit (spawns daemons)
-./gradlew :gradle-plugin:publishPlugins --dry-run  # verify metadata
+cd gradle-plugin
+./gradlew build               # compile + unit tests (DaemonClientTest)
+./gradlew functionalTest      # TestKit (spawns Gradle daemons + nemo)
+./gradlew check               # both — main CI entry point
+./gradlew publishPlugins --dry-run   # validate publication metadata
+```
+
+`functionalTest` and `DaemonClientTest` use JUnit 5 `Assumptions` to
+skip cleanly when their preconditions are missing — `DaemonClientTest`
+needs `python3` on PATH; `functionalTest` needs `nemo` on PATH (the
+AI-NEMO console script). On a JDK-only CI runner they show as
+**skipped** rather than failed; the rest of `check` still runs.
+
+To run the full `check` locally:
+
+```bash
+# from repo root
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+which nemo                    # confirm before functionalTest
+cd gradle-plugin && ./gradlew check
 ```
 
 ## Publishing to the Plugin Portal
@@ -87,10 +98,10 @@ gradle.publish.key=<api-key>
 gradle.publish.secret=<api-secret>
 ```
 
-Then:
+Then (from `gradle-plugin/`):
 
 ```bash
-./gradlew :gradle-plugin:publishPlugins
+./gradlew publishPlugins
 ```
 
 ## Wire protocol with the daemon

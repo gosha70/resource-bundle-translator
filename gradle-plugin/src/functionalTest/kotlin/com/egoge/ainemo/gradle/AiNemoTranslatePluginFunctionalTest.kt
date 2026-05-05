@@ -2,6 +2,8 @@ package com.egoge.ainemo.gradle
 
 import org.gradle.testkit.runner.GradleRunner
 import org.gradle.testkit.runner.TaskOutcome
+import org.junit.jupiter.api.Assumptions.assumeTrue
+import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
@@ -23,6 +25,40 @@ import kotlin.test.assertTrue
  * exercised.
  */
 class AiNemoTranslatePluginFunctionalTest {
+    companion object {
+        @JvmStatic
+        @BeforeAll
+        fun checkNemoAvailable() {
+            // The functional test spawns a real Gradle build that
+            // applies the plugin and runs ``translateBundles``,
+            // which in turn spawns ``nemo daemon``. Without ``nemo``
+            // on PATH the test would fail with a confusing
+            // "Cannot run program" error. Skip cleanly instead so
+            // JDK-only CI matrices and contributors without the
+            // Python venv activated can still run ``./gradlew check``
+            // for the rest of the plugin's tests.
+            //
+            // Override path with -Dainemo.executable in
+            // build.gradle.kts; we honor the same property here.
+            val executable = System.getProperty("ainemo.executable", "nemo")
+            val nemoOnPath =
+                try {
+                    val process =
+                        ProcessBuilder(executable, "--help")
+                            .redirectErrorStream(true)
+                            .start()
+                    process.waitFor() == 0
+                } catch (_: Exception) {
+                    false
+                }
+            assumeTrue(
+                nemoOnPath,
+                "$executable not on PATH; skipping TestKit functional test. " +
+                    "Install AI-NEMO (pip install -e .[dev]) and re-run.",
+            )
+        }
+    }
+
     @field:TempDir
     lateinit var projectDir: File
 

@@ -2,6 +2,7 @@ package com.egoge.ainemo.gradle
 
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.kotlin.dsl.register
 
 /**
  * Cycle-2 entry point. Per the pitch: *"the plugin is a thin
@@ -38,21 +39,26 @@ class AiNemoTranslatePlugin : Plugin<Project> {
         // @TaskAction body — its own runtime fallback is unreachable.
         extension.outputDirectory.convention(project.layout.buildDirectory.dir("ai-nemo"))
 
-        project.tasks.register(TASK_NAME, TranslateBundlesTask::class.java) { task ->
-            task.group = "ai-nemo"
-            task.description =
+        // Use the typed Kotlin DSL ``register<T>`` extension instead
+        // of ``register(name, Class, Action)``. The three-arg form
+        // collides with the ``register(name, Class, vararg Any)``
+        // overload at the call site (Kotlin 2.x can't tell whether
+        // the trailing lambda is a configure block or a vararg).
+        project.tasks.register<TranslateBundlesTask>(TASK_NAME) {
+            group = "ai-nemo"
+            description =
                 "Translate one resource bundle into N target languages via the AI-NEMO " +
                     "Python daemon. Reproducible by default (provider temperature 0; TM cache)."
             // Wire the extension's properties through to the task.
-            task.sourceFile.set(extension.sourceFile)
-            task.targetLanguages.set(extension.targetLanguages)
-            task.sourceLanguage.set(extension.sourceLanguage)
-            task.outputDirectory.set(extension.outputDirectory)
-            task.provider.set(extension.provider)
-            task.providerExecutable.set(extension.providerExecutable)
-            task.usageLogPath.set(extension.usageLogPath)
-            task.tmPath.set(extension.tmPath)
-            task.format.set(extension.format)
+            sourceFile.set(extension.sourceFile)
+            targetLanguages.set(extension.targetLanguages)
+            sourceLanguage.set(extension.sourceLanguage)
+            outputDirectory.set(extension.outputDirectory)
+            provider.set(extension.provider)
+            providerExecutable.set(extension.providerExecutable)
+            usageLogPath.set(extension.usageLogPath)
+            tmPath.set(extension.tmPath)
+            format.set(extension.format)
         }
     }
 

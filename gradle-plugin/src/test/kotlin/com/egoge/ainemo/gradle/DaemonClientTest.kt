@@ -3,6 +3,8 @@ package com.egoge.ainemo.gradle
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assumptions.assumeTrue
+import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
@@ -14,12 +16,36 @@ import java.nio.file.Path
  * implemented as a Python script. Lives in [src/test] so it runs as
  * part of the cheap unit suite (no Gradle TestKit needed).
  *
- * Precondition for these tests: `python3` on PATH. The fake daemon
- * is a self-contained 30-line script that mimics the
- * `nemo daemon` wire protocol just enough to exercise the
- * [DaemonClient] code paths.
+ * **Environment precondition**: `python3` on PATH. JDK-only build
+ * agents skip these tests via [BeforeAll] + [Assumptions.assumeTrue]
+ * rather than failing the whole suite — addresses the cycle-2
+ * cooldown finding "DaemonClientTest spawns a python3 subprocess
+ * and is therefore environment-dependent." The fake daemon is a
+ * self-contained 30-line script that mimics the `nemo daemon` wire
+ * protocol just enough to exercise the [DaemonClient] code paths.
  */
 class DaemonClientTest {
+    companion object {
+        @JvmStatic
+        @BeforeAll
+        fun checkPython3Available() {
+            val python3OnPath =
+                try {
+                    val process =
+                        ProcessBuilder("python3", "--version")
+                            .redirectErrorStream(true)
+                            .start()
+                    process.waitFor() == 0
+                } catch (_: Exception) {
+                    false
+                }
+            assumeTrue(
+                python3OnPath,
+                "python3 not on PATH; skipping DaemonClient unit tests. Install Python 3 to run.",
+            )
+        }
+    }
+
     @field:TempDir
     lateinit var tempDir: Path
 

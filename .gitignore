@@ -43,3 +43,10 @@ Pipfile.lock
 # by diffing successive local runs or capturing the JSON in PR
 # comments; the files themselves are not deliverables.
 tests/benchmarks/results/
+
+# Gradle build outputs and per-host caches under the gradle-plugin
+# module. The wrapper itself (``gradlew``, ``gradlew.bat``,
+# ``gradle/wrapper/``) is committed; everything below is generated.
+gradle-plugin/.gradle/
+gradle-plugin/build/
+gradle-plugin/.kotlin/

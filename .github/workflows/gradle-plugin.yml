@@ -1,0 +1,78 @@
+name: Gradle Plugin CI
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - "gradle-plugin/**"
+      - ".github/workflows/gradle-plugin.yml"
+  pull_request:
+    branches: [master, main]
+    paths:
+      - "gradle-plugin/**"
+      - ".github/workflows/gradle-plugin.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        java: ["17", "21"]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # The plugin requires JDK 17+. Run the matrix on 17 (LTS, our
+      # documented minimum) and 21 (current LTS) to surface
+      # toolchain regressions early.
+      - name: Set up JDK ${{ matrix.java }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ matrix.java }}
+          distribution: temurin
+
+      # Gradle's setup-gradle action handles wrapper validation +
+      # build cache + dependency cache. The plugin's own wrapper
+      # was committed in cycle-2 cooldown; setup-gradle uses it
+      # directly.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # CI does not install AI-NEMO. Both DaemonClientTest (needs
+      # python3) and AiNemoTranslatePluginFunctionalTest (needs the
+      # `nemo` console script) gate themselves with JUnit 5
+      # Assumptions.assumeTrue() and skip cleanly when the binaries
+      # aren't present. The rest of `check` (compile, plugin
+      # validation, publication-metadata validation) runs
+      # unconditionally — that's the cycle-2 cooldown decision per
+      # specs/retros/cooldown-after-02.md.
+      #
+      # Future cooldown: install AI-NEMO on a single matrix entry
+      # so the functional test actually exercises the daemon. For
+      # now we get compile + unit tests + plugin metadata verified.
+      # ``check`` includes ``validatePlugins`` (added by the
+      # ``java-gradle-plugin`` plugin) which validates the
+      # ``gradlePlugin {}`` block in build.gradle.kts — id,
+      # implementation class, display name, tags. No need for a
+      # separate metadata-validation step.
+      - name: Run gradle-plugin check
+        working-directory: gradle-plugin
+        run: ./gradlew check --stacktrace
+
+      # Keep the Gradle test reports around so failures are
+      # diagnosable from the workflow run page.
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-plugin-test-reports-jdk${{ matrix.java }}
+          path: |
+            gradle-plugin/build/reports/tests/
+            gradle-plugin/build/test-results/
+          if-no-files-found: ignore
