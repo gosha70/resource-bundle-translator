@@ -102,14 +102,28 @@ landed inline in the same PR.
   persona/domain matching. Add a contract test once the
   termbase / personas land.
 
-### Documentation (scope 15 — finish this cycle, not cooldown)
+### Documentation (scope 15) — landed in PR #7
 
-- `docs/providers.md` — one section per provider (NLLB, OPUS,
-  OpenAI, Anthropic, Ollama, Noop, Manual): prereqs, default
-  model, env vars, cost-tracking shape, supported language pairs.
-- `docs/gradle-plugin.md` — DSL reference, IPC contract, common
-  failure modes (missing `nemo` on PATH, wrong JDK), publishing
-  flow.
+- [`docs/providers.md`](../../docs/providers.md) — Provider Protocol
+  overview, ProviderResult shape, UsageLog scoping, TM provider
+  scoping, then one section per provider (`noop`, `nllb`, `opus`,
+  `openai`, `anthropic`, `ollama`) covering prereqs, default model,
+  env vars, cost behavior, reproducibility knobs, quote/whitespace
+  handling, and supported language pairs. Plus the routing-
+  fail-fast contract and the "adding a new provider" checklist.
+- [`docs/gradle-plugin.md`](../../docs/gradle-plugin.md) — apply
+  recipe, full DSL reference (every `aiNemoTranslate` property
+  with its type, default, and contract), what the task does
+  end-to-end, the JSON-over-stdio IPC contract (envelope schema,
+  every op + result keys, every error code, wire-framing rules),
+  build / publish instructions, troubleshooting (missing PATH,
+  missing API keys, version-mismatch, validation errors, wrong
+  JDK, Windows pipe-deadlock workaround), and the explicit cycle-2
+  limitations cross-referencing this retro.
+
+Source material was already in the code; this was mechanical
+writing rather than design. Both files are published — scope 15
+is **done** and the pitch's full 15 scopes have shipped.
 
 ## Inline review fixes that landed in PR #7
 

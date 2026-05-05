@@ -17,6 +17,6 @@
     {"id": 12, "name": "Gradle TestKit functional test",                "status": "done",   "moved_at": "2026-05-02"},
     {"id": 13, "name": "Plugin Portal publishing setup",                "status": "done",   "moved_at": "2026-05-02"},
     {"id": 14, "name": "Benchmarks (cost + latency)",                   "status": "uphill", "moved_at": null},
-    {"id": 15, "name": "Documentation (providers, gradle plugin)",      "status": "uphill", "moved_at": null}
+    {"id": 15, "name": "Documentation (providers, gradle plugin)",      "status": "done",   "moved_at": "2026-05-05"}
   ]
 }
