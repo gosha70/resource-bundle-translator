@@ -1,8 +1,8 @@
 ---
 cooldown_after_cycle: 02
 started: 2026-05-05
-ended: 2026-05-05
-duration: 1w
+ended: TBD
+duration: TBD
 ---
 
 <!-- Generated at the end of cycle 2 by the cooldown-report agent. -->
