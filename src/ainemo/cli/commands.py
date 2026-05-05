@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import ClassVar, Final
 
@@ -29,8 +30,17 @@ from ainemo.core.validators.forbidden import ForbiddenTermsValidator
 from ainemo.core.validators.icu import IcuSyntaxValidator
 from ainemo.core.validators.length import LengthBudgetValidator
 from ainemo.core.validators.placeholder import PlaceholderParityValidator
-from ainemo.providers._ids import PROVIDER_ID_NOOP
+from ainemo.providers._ids import (
+    PROVIDER_ID_ANTHROPIC,
+    PROVIDER_ID_NLLB,
+    PROVIDER_ID_NOOP,
+    PROVIDER_ID_OLLAMA,
+    PROVIDER_ID_OPENAI,
+    PROVIDER_ID_OPUS,
+)
+from ainemo.providers._usage_log import DEFAULT_USAGE_LOG_PATH, UsageLog
 from ainemo.providers.base import Provider, ProviderResult
+from ainemo.providers.router import ProviderRouter, RoutingConfig
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +49,7 @@ logger = logging.getLogger(__name__)
 CMD_NAME_TRANSLATE: Final = "translate"
 CMD_NAME_TM: Final = "tm"
 CMD_NAME_VALIDATE: Final = "validate"
+CMD_NAME_PROVIDER: Final = "provider"
 
 # --- Adapter registry -----------------------------------------------------
 
@@ -59,6 +70,19 @@ _EXTENSION_TO_FORMAT_ID: dict[str, str] = {
 _EXIT_OK: Final = 0
 _EXIT_VALIDATION_ERROR: Final = 1
 _EXIT_USAGE: Final = 2
+
+# --- Provider registry (CLI --provider flag) -----------------------------
+
+# Cycle-2 CLI providers. Order = the choices list shown in `--help`.
+# noop is first because it's the safe default for offline pipeline runs.
+_PROVIDER_CHOICES: Final = (
+    PROVIDER_ID_NOOP,
+    PROVIDER_ID_NLLB,
+    PROVIDER_ID_OPUS,
+    PROVIDER_ID_OPENAI,
+    PROVIDER_ID_ANTHROPIC,
+    PROVIDER_ID_OLLAMA,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -118,6 +142,30 @@ def register_translate(
         default=[],
         help="Forbidden term to flag in target text. May be repeated.",
     )
+    parser.add_argument(
+        "--provider",
+        dest="provider_id",
+        choices=_PROVIDER_CHOICES,
+        default=PROVIDER_ID_NOOP,
+        help=(
+            "Translation provider to use. ``noop`` (default) echoes the "
+            "source text and exercises the pipeline without any model. "
+            "``nllb`` and ``opus`` are local; ``openai`` requires "
+            "OPENAI_API_KEY; ``anthropic`` requires ANTHROPIC_API_KEY; "
+            "``ollama`` requires a running Ollama daemon (OLLAMA_HOST or "
+            "the localhost:11434 default)."
+        ),
+    )
+    parser.add_argument(
+        "--usage-log",
+        dest="usage_log_path",
+        type=Path,
+        default=DEFAULT_USAGE_LOG_PATH,
+        help=(
+            "JSONL path the router appends per-call usage records to. "
+            f"Default: {DEFAULT_USAGE_LOG_PATH}."
+        ),
+    )
 
 
 def run_translate(args: argparse.Namespace) -> int:
@@ -135,15 +183,12 @@ def run_translate(args: argparse.Namespace) -> int:
 
     tm = SqliteTranslationMemory(args.tm_path)
     try:
-        # Cycle-1 CLI ships without a real provider — translation
-        # against a live model is provider-shaped and lands in cycle 2
-        # via `nemo daemon`. For cycle-1 the CLI is wired end-to-end
-        # against a `_NoOpProvider` that returns the source text
-        # unchanged; this validates the full pipeline plumbing
-        # (parse → TM → provider → validators → serialize) on real
-        # files and surfaces TM cache hits on second runs. Real
-        # translation is a `--provider` flag in cycle 2.
-        provider: Provider = _NoOpProvider()
+        # Cycle-2 CLI: the requested ``--provider`` is built lazily and
+        # wrapped in a :class:`ProviderRouter` so every call records to
+        # the UsageLog (per AGENTS.md § Provider Rules). The pipeline
+        # always sees a router — there is no bare-provider path from the
+        # CLI any more, even for the noop default.
+        provider: Provider = _build_router(args.provider_id, args.usage_log_path)
         validators = _build_validators(args.forbidden_terms)
         pipeline = TranslationPipeline(
             adapter=adapter,
@@ -153,6 +198,12 @@ def run_translate(args: argparse.Namespace) -> int:
             target_langs=target_langs,
             source_lang=args.source_lang,
             strict=args.strict,
+            # P1 fix (PR #7 review): scope TM lookups to the requested
+            # provider so a prior ``--provider noop`` run does not
+            # satisfy a later ``--provider openai`` run. Model is left
+            # unconstrained — callers who want per-model scoping pass
+            # it through the routes-config layer (cycle 3).
+            expected_provider=args.provider_id,
         )
         result = pipeline.translate_file(source_path, args.output_dir)
         _print_translate_summary(result)
@@ -289,6 +340,50 @@ def run_validate(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
+def _build_provider(provider_id: str) -> Provider:
+    """Construct a single concrete provider for the CLI's ``--provider``
+    choice. Real-SDK providers (NLLB, OPUS, OpenAI) build their lazy
+    clients inside their constructors, so module import stays cheap and
+    the CLI prints ``--help`` without reaching for any model weights or
+    API keys."""
+    if provider_id == PROVIDER_ID_NOOP:
+        return _NoOpProvider()
+    if provider_id == PROVIDER_ID_NLLB:
+        from ainemo.providers.nllb.nllb_provider import NllbProvider
+
+        return NllbProvider()
+    if provider_id == PROVIDER_ID_OPUS:
+        from ainemo.providers.opus.opus_provider import OpusProvider
+
+        return OpusProvider()
+    if provider_id == PROVIDER_ID_OPENAI:
+        from ainemo.providers.openai.openai_provider import OpenAIProvider
+
+        return OpenAIProvider()
+    if provider_id == PROVIDER_ID_ANTHROPIC:
+        from ainemo.providers.anthropic.anthropic_provider import AnthropicProvider
+
+        return AnthropicProvider()
+    if provider_id == PROVIDER_ID_OLLAMA:
+        from ainemo.providers.ollama.ollama_provider import OllamaProvider
+
+        return OllamaProvider()
+    raise ValueError(f"Unknown provider id: {provider_id!r}. Known ids: {list(_PROVIDER_CHOICES)}.")
+
+
+def _build_router(provider_id: str, usage_log_path: Path) -> ProviderRouter:
+    """Wrap one concrete provider behind a :class:`ProviderRouter`. Even
+    a single-provider CLI call goes through the router so cost/latency
+    surveillance is uniform across CLI, daemon, and Gradle plugin
+    invocations (per AGENTS.md § Provider Rules)."""
+    provider = _build_provider(provider_id)
+    return ProviderRouter(
+        providers={provider_id: provider},
+        routing_config=RoutingConfig(default_provider=provider_id),
+        usage_log=UsageLog(usage_log_path),
+    )
+
+
 class _NoOpProvider:
     """Cycle-1 placeholder provider. Returns source text unchanged.
 
@@ -363,14 +458,170 @@ def _configure_logging() -> None:
     )
 
 
+# ---------------------------------------------------------------------------
+# `nemo provider list / stats`
+# ---------------------------------------------------------------------------
+
+# Per cycle-2 pitch scope 8: ``nemo provider list`` shows registered
+# providers and their availability; ``nemo provider stats`` summarizes
+# the UsageLog. ``--since`` filters stats by ISO timestamp.
+
+_PROVIDER_SUBCMD_LIST: Final = "list"
+_PROVIDER_SUBCMD_STATS: Final = "stats"
+
+
+def register_provider(
+    subparsers: argparse._SubParsersAction,  # type: ignore[type-arg]
+) -> None:
+    parser = subparsers.add_parser(
+        CMD_NAME_PROVIDER,
+        help="Inspect registered translation providers and call statistics.",
+    )
+    provider_sub = parser.add_subparsers(dest="provider_subcommand")
+
+    provider_sub.add_parser(
+        _PROVIDER_SUBCMD_LIST,
+        help="List registered providers and their environment-availability.",
+    )
+
+    stats_parser = provider_sub.add_parser(
+        _PROVIDER_SUBCMD_STATS,
+        help="Aggregate the UsageLog: call counts, tokens, latency, cost.",
+    )
+    stats_parser.add_argument(
+        "--usage-log",
+        dest="usage_log_path",
+        type=Path,
+        default=DEFAULT_USAGE_LOG_PATH,
+    )
+    stats_parser.add_argument(
+        "--since",
+        dest="since_iso",
+        default=None,
+        help="ISO-format timestamp; only count records with timestamp >= this.",
+    )
+
+
+def run_provider(args: argparse.Namespace) -> int:
+    _configure_logging()
+    sub = args.provider_subcommand
+    if sub == _PROVIDER_SUBCMD_LIST:
+        return _run_provider_list()
+    if sub == _PROVIDER_SUBCMD_STATS:
+        return _run_provider_stats(args.usage_log_path, args.since_iso)
+    logger.error(
+        "Unknown `nemo provider` subcommand: %r. Try `nemo provider list` or "
+        "`nemo provider stats`.",
+        sub,
+    )
+    return _EXIT_USAGE
+
+
+def _run_provider_list() -> int:
+    """Print every cycle-2 provider id alongside its environment-
+    availability. Availability is best-effort: env-var presence for
+    cloud providers, "always" for local providers (NLLB / OPUS / Ollama
+    where the precondition is a daemon or a downloaded model rather
+    than an env var)."""
+    rows = list(_provider_availability_rows())
+    sys.stdout.write("Registered providers:\n")
+    for provider_id, status, detail in rows:
+        sys.stdout.write(f"  {provider_id:<10} {status:<14} {detail}\n")
+    return _EXIT_OK
+
+
+def _provider_availability_rows() -> list[tuple[str, str, str]]:
+    import os
+
+    rows: list[tuple[str, str, str]] = []
+    rows.append((PROVIDER_ID_NOOP, "available", "always (echoes source text)"))
+    rows.append(
+        (PROVIDER_ID_NLLB, "available", "local model (downloads from HuggingFace on first use)")
+    )
+    rows.append(
+        (PROVIDER_ID_OPUS, "available", "local model (downloads from HuggingFace on first use)")
+    )
+
+    openai_key = os.getenv("OPENAI_API_KEY")
+    rows.append(
+        (
+            PROVIDER_ID_OPENAI,
+            "available" if openai_key else "missing-key",
+            "OPENAI_API_KEY " + ("set" if openai_key else "not set"),
+        )
+    )
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+    rows.append(
+        (
+            PROVIDER_ID_ANTHROPIC,
+            "available" if anthropic_key else "missing-key",
+            "ANTHROPIC_API_KEY " + ("set" if anthropic_key else "not set"),
+        )
+    )
+
+    ollama_host = os.getenv("OLLAMA_HOST")
+    rows.append(
+        (
+            PROVIDER_ID_OLLAMA,
+            "available",
+            f"daemon at {ollama_host or 'http://localhost:11434 (default)'}",
+        )
+    )
+    return rows
+
+
+def _run_provider_stats(usage_log_path: Path, since_iso: str | None) -> int:
+    if not usage_log_path.exists():
+        sys.stdout.write(f"No usage log at {usage_log_path}; no provider calls recorded yet.\n")
+        return _EXIT_OK
+    log = UsageLog(usage_log_path)
+    since = _parse_iso(since_iso) if since_iso else None
+    stats = log.stats(since=since)
+    sys.stdout.write(f"Usage log: {usage_log_path}\n")
+    if since_iso:
+        sys.stdout.write(f"Since:     {since_iso}\n")
+    sys.stdout.write(
+        f"  calls:               {stats.call_count}\n"
+        f"  total input tokens:  {stats.total_input_tokens}\n"
+        f"  total output tokens: {stats.total_output_tokens}\n"
+        f"  total latency (ms):  {stats.total_latency_ms}\n"
+        f"  total cost (USD):    {stats.total_cost_usd:.6f}\n"
+    )
+    if stats.by_provider:
+        sys.stdout.write("  by provider:\n")
+        for provider, count in sorted(stats.by_provider.items()):
+            sys.stdout.write(f"    {provider:<12} {count}\n")
+    if stats.by_model:
+        sys.stdout.write("  by model:\n")
+        for model, count in sorted(stats.by_model.items()):
+            sys.stdout.write(f"    {model:<32} {count}\n")
+    return _EXIT_OK
+
+
+def _parse_iso(s: str) -> datetime:
+    """Best-effort ISO-8601 parse. Bare dates accepted as midnight UTC."""
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError as exc:
+        raise SystemExit(
+            f"--since must be ISO-8601 (e.g. 2026-05-01 or 2026-05-01T12:00:00). Got: {s!r}"
+        ) from exc
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 __all__ = [
     "CMD_NAME_TRANSLATE",
     "CMD_NAME_TM",
     "CMD_NAME_VALIDATE",
+    "CMD_NAME_PROVIDER",
     "register_translate",
     "register_tm",
     "register_validate",
+    "register_provider",
     "run_translate",
     "run_tm",
     "run_validate",
+    "run_provider",
 ]

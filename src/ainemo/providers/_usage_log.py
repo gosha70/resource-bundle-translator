@@ -25,7 +25,6 @@ JSONL was chosen over a SQLite table because:
 from __future__ import annotations
 
 import json
-import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -123,16 +122,17 @@ class UsageLog:
         total_cost = 0.0
         by_provider: dict[str, int] = {}
         by_model: dict[str, int] = {}
+        since_iso = since.isoformat() if since is not None else None
         for record in self._iter_records():
-            if since is not None and record[FIELD_TIMESTAMP] < since.isoformat():
+            if since_iso is not None and str(record.get(FIELD_TIMESTAMP, "")) < since_iso:
                 continue
             call_count += 1
-            total_input += int(record[FIELD_INPUT_TOKENS] or 0)
-            total_output += int(record[FIELD_OUTPUT_TOKENS] or 0)
-            total_latency += int(record[FIELD_LATENCY_MS] or 0)
-            total_cost += float(record[FIELD_COST_USD] or 0.0)
-            provider = str(record[FIELD_PROVIDER])
-            model = str(record[FIELD_MODEL])
+            total_input += _as_int(record.get(FIELD_INPUT_TOKENS))
+            total_output += _as_int(record.get(FIELD_OUTPUT_TOKENS))
+            total_latency += _as_int(record.get(FIELD_LATENCY_MS))
+            total_cost += _as_float(record.get(FIELD_COST_USD))
+            provider = str(record.get(FIELD_PROVIDER, ""))
+            model = str(record.get(FIELD_MODEL, ""))
             by_provider[provider] = by_provider.get(provider, 0) + 1
             by_model[model] = by_model.get(model, 0) + 1
         return UsageStats(
@@ -165,10 +165,25 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _now_ms() -> int:
-    """Wall-clock ms since epoch — handy for callers timing provider
-    calls before they have a result to record."""
-    return int(time.time() * 1000)
+def _as_int(value: object) -> int:
+    """Coerce a JSON-decoded value to int. ``None`` and missing fields
+    become 0 so partial records (e.g. local providers without token
+    counts) sum cleanly. Non-numeric values become 0 rather than
+    raising — the log is best-effort observability."""
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, (int, float)):
+        return int(value)
+    return 0
+
+
+def _as_float(value: object) -> float:
+    """Same shape as :func:`_as_int` for float-typed fields."""
+    if isinstance(value, bool):
+        return float(value)
+    if isinstance(value, (int, float)):
+        return float(value)
+    return 0.0
 
 
 __all__ = [

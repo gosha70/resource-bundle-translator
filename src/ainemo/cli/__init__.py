@@ -19,13 +19,16 @@ import sys
 from typing import Sequence
 
 from ainemo.cli.commands import (
+    CMD_NAME_PROVIDER,
     CMD_NAME_TM,
     CMD_NAME_TRANSLATE,
     CMD_NAME_VALIDATE,
+    register_provider,
     register_tm,
     register_translate,
     register_validate,
 )
+from ainemo.cli.daemon import CMD_NAME_DAEMON, register_daemon
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -41,6 +44,8 @@ def _build_parser() -> argparse.ArgumentParser:
     register_translate(subparsers)
     register_tm(subparsers)
     register_validate(subparsers)
+    register_provider(subparsers)
+    register_daemon(subparsers)
     return parser
 
 
@@ -67,6 +72,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         from ainemo.cli.commands import run_validate
 
         return run_validate(args)
+    if args.subcommand == CMD_NAME_PROVIDER:
+        from ainemo.cli.commands import run_provider
+
+        return run_provider(args)
+    if args.subcommand == CMD_NAME_DAEMON:
+        from ainemo.cli.daemon import run_daemon
+
+        return run_daemon(args)
     parser.print_help(sys.stderr)
     return 2
 
