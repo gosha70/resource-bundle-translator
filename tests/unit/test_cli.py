@@ -8,6 +8,7 @@ import pytest
 
 from ainemo.cli import main
 from ainemo.cli.commands import (
+    CMD_NAME_PROVIDER,
     CMD_NAME_TM,
     CMD_NAME_TRANSLATE,
     CMD_NAME_VALIDATE,
@@ -267,3 +268,133 @@ def test_validate_clean_pair(tmp_path: Path, capsys: pytest.CaptureFixture[str])
         ]
     )
     assert rc == 0
+
+
+# --- nemo provider list / stats (cycle-2 scope 8) -------------------------
+
+
+def test_provider_list_prints_all_six_providers(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    rc = main([CMD_NAME_PROVIDER, "list"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "noop" in out
+    assert "nllb" in out
+    assert "opus" in out
+    assert "openai" in out
+    assert "anthropic" in out
+    assert "ollama" in out
+
+
+def test_provider_list_marks_cloud_providers_missing_key_when_unset(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    rc = main([CMD_NAME_PROVIDER, "list"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    # Each cloud provider's row has "missing-key" when env unset.
+    openai_line = next(line for line in out.splitlines() if line.strip().startswith("openai"))
+    anthropic_line = next(line for line in out.splitlines() if line.strip().startswith("anthropic"))
+    assert "missing-key" in openai_line
+    assert "missing-key" in anthropic_line
+
+
+def test_provider_list_marks_cloud_providers_available_when_keys_set(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    rc = main([CMD_NAME_PROVIDER, "list"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    openai_line = next(line for line in out.splitlines() if line.strip().startswith("openai"))
+    anthropic_line = next(line for line in out.splitlines() if line.strip().startswith("anthropic"))
+    assert "available" in openai_line
+    assert "available" in anthropic_line
+
+
+def test_provider_stats_missing_log_returns_zero_with_message(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    rc = main(
+        [
+            CMD_NAME_PROVIDER,
+            "stats",
+            "--usage-log",
+            str(tmp_path / "no-such-log.jsonl"),
+        ]
+    )
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "No usage log" in out
+
+
+def test_provider_stats_aggregates_real_log(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """End-to-end: a translate run populates the log; ``provider stats``
+    reads it back and reports the call count + per-provider breakdown."""
+    src = tmp_path / "messages_en_US.properties"
+    src.write_text("k1=Hello\nk2=World\n", encoding="utf-8")
+    usage_log = tmp_path / "usage.jsonl"
+    main(
+        [
+            CMD_NAME_TRANSLATE,
+            "--from",
+            str(src),
+            "--to-langs",
+            "de-DE",
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--tm-path",
+            str(tmp_path / "tm.sqlite"),
+            "--usage-log",
+            str(usage_log),
+        ]
+    )
+    capsys.readouterr()  # drain translate output
+
+    rc = main([CMD_NAME_PROVIDER, "stats", "--usage-log", str(usage_log)])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "calls:" in out
+    # Two segments → two provider calls under the noop default.
+    assert "2" in out
+    assert "noop" in out
+
+
+def test_provider_stats_invalid_since_raises(tmp_path: Path) -> None:
+    """``--since`` must be parseable as ISO-8601; bad input surfaces a
+    clear error rather than silently filtering everything out."""
+    log = tmp_path / "usage.jsonl"
+    log.write_text("", encoding="utf-8")
+    with pytest.raises(SystemExit, match="ISO-8601"):
+        main(
+            [
+                CMD_NAME_PROVIDER,
+                "stats",
+                "--usage-log",
+                str(log),
+                "--since",
+                "not-a-date",
+            ]
+        )
+
+
+def test_provider_unknown_subcommand_returns_usage_error(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """``nemo provider`` with no subcommand should fall through to the
+    unknown-subcommand branch and exit non-zero."""
+    rc = main([CMD_NAME_PROVIDER])
+    assert rc == 2

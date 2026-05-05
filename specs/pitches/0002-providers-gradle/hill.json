@@ -10,7 +10,7 @@
     {"id": 5,  "name": "Migrate NLLB/OPUS/OpenAI to Provider Protocol", "status": "done",   "moved_at": "2026-05-02"},
     {"id": 6,  "name": "AnthropicProvider (NEW)",                       "status": "done",   "moved_at": "2026-05-02"},
     {"id": 7,  "name": "OllamaProvider (NEW)",                          "status": "done",   "moved_at": "2026-05-02"},
-    {"id": 8,  "name": "nemo provider list / stats CLI",                "status": "uphill", "moved_at": null},
+    {"id": 8,  "name": "nemo provider list / stats CLI",                "status": "done",   "moved_at": "2026-05-02"},
     {"id": 9,  "name": "Daemon mode (nemo daemon JSON-over-stdio)",     "status": "uphill", "moved_at": null},
     {"id": 10, "name": "gradle-plugin/ skeleton + Kotlin DSL",          "status": "uphill", "moved_at": null},
     {"id": 11, "name": "TranslateBundlesTask + DaemonClient",           "status": "uphill", "moved_at": null},
