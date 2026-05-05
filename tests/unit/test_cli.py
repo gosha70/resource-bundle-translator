@@ -166,6 +166,89 @@ def test_validate_subcommand(tmp_path: Path, capsys: pytest.CaptureFixture[str])
     assert "placeholder-parity" in captured.out
 
 
+def test_translate_default_provider_is_noop_and_records_usage(
+    tmp_path: Path,
+) -> None:
+    """The CLI defaults to ``--provider noop`` and routes through
+    :class:`ProviderRouter`, which means every call appends to the
+    usage log even on a noop run."""
+    src = tmp_path / "messages_en_US.properties"
+    src.write_text("greeting=Hello\nfarewell=Goodbye\n", encoding="utf-8")
+    usage_log = tmp_path / "usage.jsonl"
+
+    rc = main(
+        [
+            CMD_NAME_TRANSLATE,
+            "--from",
+            str(src),
+            "--to-langs",
+            "de-DE",
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--tm-path",
+            str(tmp_path / "tm.sqlite"),
+            "--usage-log",
+            str(usage_log),
+        ]
+    )
+    assert rc == 0
+    assert usage_log.exists()
+    lines = [ln for ln in usage_log.read_text(encoding="utf-8").splitlines() if ln]
+    # Two segments × one target lang = two usage records.
+    assert len(lines) == 2
+    import json
+
+    record = json.loads(lines[0])
+    assert record["provider"] == "noop"
+
+
+def test_translate_explicit_noop_provider_argument_accepted(tmp_path: Path) -> None:
+    """``--provider noop`` is the default but must also be accepted as
+    an explicit choice — argparse choices wiring sanity check."""
+    src = tmp_path / "messages_en_US.properties"
+    src.write_text("greeting=Hello\n", encoding="utf-8")
+    rc = main(
+        [
+            CMD_NAME_TRANSLATE,
+            "--from",
+            str(src),
+            "--to-langs",
+            "de-DE",
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--tm-path",
+            str(tmp_path / "tm.sqlite"),
+            "--usage-log",
+            str(tmp_path / "usage.jsonl"),
+            "--provider",
+            "noop",
+        ]
+    )
+    assert rc == 0
+
+
+def test_translate_unknown_provider_choice_is_rejected(tmp_path: Path) -> None:
+    """argparse should reject any provider id not in the choices list."""
+    src = tmp_path / "messages_en_US.properties"
+    src.write_text("greeting=Hello\n", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        main(
+            [
+                CMD_NAME_TRANSLATE,
+                "--from",
+                str(src),
+                "--to-langs",
+                "de-DE",
+                "--output-dir",
+                str(tmp_path / "out"),
+                "--tm-path",
+                str(tmp_path / "tm.sqlite"),
+                "--provider",
+                "made-up-provider",
+            ]
+        )
+
+
 def test_validate_clean_pair(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     src = tmp_path / "messages_en_US.properties"
     src.write_text("welcome=Hello {name}!\n", encoding="utf-8")

@@ -29,8 +29,15 @@ from ainemo.core.validators.forbidden import ForbiddenTermsValidator
 from ainemo.core.validators.icu import IcuSyntaxValidator
 from ainemo.core.validators.length import LengthBudgetValidator
 from ainemo.core.validators.placeholder import PlaceholderParityValidator
-from ainemo.providers._ids import PROVIDER_ID_NOOP
+from ainemo.providers._ids import (
+    PROVIDER_ID_NLLB,
+    PROVIDER_ID_NOOP,
+    PROVIDER_ID_OPENAI,
+    PROVIDER_ID_OPUS,
+)
+from ainemo.providers._usage_log import DEFAULT_USAGE_LOG_PATH, UsageLog
 from ainemo.providers.base import Provider, ProviderResult
+from ainemo.providers.router import ProviderRouter, RoutingConfig
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +66,17 @@ _EXTENSION_TO_FORMAT_ID: dict[str, str] = {
 _EXIT_OK: Final = 0
 _EXIT_VALIDATION_ERROR: Final = 1
 _EXIT_USAGE: Final = 2
+
+# --- Provider registry (CLI --provider flag) -----------------------------
+
+# Cycle-2 CLI providers. Order = the choices list shown in `--help`.
+# noop is first because it's the safe default for offline pipeline runs.
+_PROVIDER_CHOICES: Final = (
+    PROVIDER_ID_NOOP,
+    PROVIDER_ID_NLLB,
+    PROVIDER_ID_OPUS,
+    PROVIDER_ID_OPENAI,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -118,6 +136,28 @@ def register_translate(
         default=[],
         help="Forbidden term to flag in target text. May be repeated.",
     )
+    parser.add_argument(
+        "--provider",
+        dest="provider_id",
+        choices=_PROVIDER_CHOICES,
+        default=PROVIDER_ID_NOOP,
+        help=(
+            "Translation provider to use. ``noop`` (default) echoes the "
+            "source text and exercises the pipeline without any model. "
+            "``nllb`` and ``opus`` are local; ``openai`` requires "
+            "OPENAI_API_KEY."
+        ),
+    )
+    parser.add_argument(
+        "--usage-log",
+        dest="usage_log_path",
+        type=Path,
+        default=DEFAULT_USAGE_LOG_PATH,
+        help=(
+            "JSONL path the router appends per-call usage records to. "
+            f"Default: {DEFAULT_USAGE_LOG_PATH}."
+        ),
+    )
 
 
 def run_translate(args: argparse.Namespace) -> int:
@@ -135,15 +175,12 @@ def run_translate(args: argparse.Namespace) -> int:
 
     tm = SqliteTranslationMemory(args.tm_path)
     try:
-        # Cycle-1 CLI ships without a real provider — translation
-        # against a live model is provider-shaped and lands in cycle 2
-        # via `nemo daemon`. For cycle-1 the CLI is wired end-to-end
-        # against a `_NoOpProvider` that returns the source text
-        # unchanged; this validates the full pipeline plumbing
-        # (parse → TM → provider → validators → serialize) on real
-        # files and surfaces TM cache hits on second runs. Real
-        # translation is a `--provider` flag in cycle 2.
-        provider: Provider = _NoOpProvider()
+        # Cycle-2 CLI: the requested ``--provider`` is built lazily and
+        # wrapped in a :class:`ProviderRouter` so every call records to
+        # the UsageLog (per AGENTS.md § Provider Rules). The pipeline
+        # always sees a router — there is no bare-provider path from the
+        # CLI any more, even for the noop default.
+        provider: Provider = _build_router(args.provider_id, args.usage_log_path)
         validators = _build_validators(args.forbidden_terms)
         pipeline = TranslationPipeline(
             adapter=adapter,
@@ -287,6 +324,42 @@ def run_validate(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 # Internals
 # ---------------------------------------------------------------------------
+
+
+def _build_provider(provider_id: str) -> Provider:
+    """Construct a single concrete provider for the CLI's ``--provider``
+    choice. Real-SDK providers (NLLB, OPUS, OpenAI) build their lazy
+    clients inside their constructors, so module import stays cheap and
+    the CLI prints ``--help`` without reaching for any model weights or
+    API keys."""
+    if provider_id == PROVIDER_ID_NOOP:
+        return _NoOpProvider()
+    if provider_id == PROVIDER_ID_NLLB:
+        from ainemo.providers.nllb.nllb_provider import NllbProvider
+
+        return NllbProvider()
+    if provider_id == PROVIDER_ID_OPUS:
+        from ainemo.providers.opus.opus_provider import OpusProvider
+
+        return OpusProvider()
+    if provider_id == PROVIDER_ID_OPENAI:
+        from ainemo.providers.openai.openai_provider import OpenAIProvider
+
+        return OpenAIProvider()
+    raise ValueError(f"Unknown provider id: {provider_id!r}. Known ids: {list(_PROVIDER_CHOICES)}.")
+
+
+def _build_router(provider_id: str, usage_log_path: Path) -> ProviderRouter:
+    """Wrap one concrete provider behind a :class:`ProviderRouter`. Even
+    a single-provider CLI call goes through the router so cost/latency
+    surveillance is uniform across CLI, daemon, and Gradle plugin
+    invocations (per AGENTS.md § Provider Rules)."""
+    provider = _build_provider(provider_id)
+    return ProviderRouter(
+        providers={provider_id: provider},
+        routing_config=RoutingConfig(default_provider=provider_id),
+        usage_log=UsageLog(usage_log_path),
+    )
 
 
 class _NoOpProvider:
