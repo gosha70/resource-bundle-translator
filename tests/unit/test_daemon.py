@@ -457,3 +457,113 @@ def test_loop_continues_after_systemexit(tmp_path: Path) -> None:
     assert responses[0]["ok"] is False
     assert responses[0]["error"]["code"] == ERR_INVALID_PARAMS
     assert responses[1]["ok"] is True
+
+
+# --- Cycle-3 S6 persona-aware envelope -----------------------------------
+
+
+def test_translate_without_persona_id_stays_cycle2_compatible(tmp_path: Path) -> None:
+    """Cycle-3 S6 envelope contract: omitting `persona_id` must
+    leave the daemon's behavior byte-identical to cycle-2. The
+    response shape is unchanged and no termbase is opened on disk.
+    """
+    server = DaemonServer(usage_log_path=tmp_path / "usage.jsonl")
+    [response] = _drive(
+        server,
+        [
+            {
+                "v": "1",
+                "id": "t1",
+                "op": OP_TRANSLATE,
+                "params": {
+                    "key": "greeting",
+                    "source_text": "Hello",
+                    "source_lang": "en-US",
+                    "target_lang": "de-DE",
+                    "provider": "noop",
+                },
+            }
+        ],
+    )
+    assert response["ok"] is True
+    # No termbase was opened — `_termbases` cache stays empty.
+    assert server._termbases == {}
+
+
+def test_translate_with_unknown_persona_id_returns_invalid_params(tmp_path: Path) -> None:
+    """Cycle-3 S6: a `persona_id` that doesn't exist in the
+    referenced termbase surfaces as ERR_INVALID_PARAMS so the
+    Gradle plugin learns the misconfiguration rather than silently
+    getting cycle-2 behavior."""
+    from ainemo.core.termbase.kuzu.store import KuzuTermbase
+
+    tb_path = tmp_path / "tb.kuzu"
+    KuzuTermbase(tb_path).close()  # initialize empty termbase
+
+    server = DaemonServer(usage_log_path=tmp_path / "usage.jsonl")
+    [response] = _drive(
+        server,
+        [
+            {
+                "v": "1",
+                "id": "t1",
+                "op": OP_TRANSLATE,
+                "params": {
+                    "key": "greeting",
+                    "source_text": "Hello",
+                    "source_lang": "en-US",
+                    "target_lang": "de-DE",
+                    "provider": "noop",
+                    "persona_id": "does-not-exist",
+                    "termbase_path": str(tb_path),
+                },
+            }
+        ],
+    )
+    assert response["ok"] is False
+    assert response["error"]["code"] == ERR_INVALID_PARAMS
+    assert "does-not-exist" in response["error"]["message"]
+
+
+def test_translate_with_persona_id_loads_persona_from_termbase(tmp_path: Path) -> None:
+    """Cycle-3 S6: when `persona_id` resolves to a real persona
+    in the supplied termbase, the daemon completes the request
+    successfully. The noop provider echoes regardless of addendum,
+    so this test pins the dispatch path — not the LLM behavior."""
+    from ainemo.core.termbase.base import Persona
+    from ainemo.core.termbase.kuzu.store import KuzuTermbase
+
+    tb_path = tmp_path / "tb.kuzu"
+    tb = KuzuTermbase(tb_path)
+    tb.add_persona(
+        Persona(
+            persona_id="software-ui",
+            name="Software UI",
+            forbidden_terms=(),
+            prompt_addendum="Tight UI translation.",
+        )
+    )
+    tb.close()
+
+    server = DaemonServer(usage_log_path=tmp_path / "usage.jsonl")
+    [response] = _drive(
+        server,
+        [
+            {
+                "v": "1",
+                "id": "t1",
+                "op": OP_TRANSLATE,
+                "params": {
+                    "key": "greeting",
+                    "source_text": "Hello",
+                    "source_lang": "en-US",
+                    "target_lang": "de-DE",
+                    "provider": "noop",
+                    "persona_id": "software-ui",
+                    "termbase_path": str(tb_path),
+                },
+            }
+        ],
+    )
+    assert response["ok"] is True
+    assert response["result"]["target_text"] == "Hello"

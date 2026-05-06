@@ -32,7 +32,9 @@ class _FakeProvider:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str]] = []
 
-    def translate(self, segment: Segment, target_lang: str) -> ProviderResult:
+    def translate(
+        self, segment: Segment, target_lang: str, *, system_prompt_addendum: str | None = None
+    ) -> ProviderResult:
         self.calls.append((segment.source_text, target_lang))
         return ProviderResult(
             target_text=f"[{target_lang}] {segment.source_text}",
@@ -50,7 +52,9 @@ class _DroppingProvider:
 
     provider_id: ClassVar[str] = "dropping"
 
-    def translate(self, segment: Segment, target_lang: str) -> ProviderResult:
+    def translate(
+        self, segment: Segment, target_lang: str, *, system_prompt_addendum: str | None = None
+    ) -> ProviderResult:
         out: list[str] = []
         in_placeholder = False
         for ch in segment.source_text:
@@ -365,7 +369,9 @@ class _SecondProvider:
 
     provider_id: ClassVar[str] = "other"
 
-    def translate(self, segment: Segment, target_lang: str) -> ProviderResult:
+    def translate(
+        self, segment: Segment, target_lang: str, *, system_prompt_addendum: str | None = None
+    ) -> ProviderResult:
         return ProviderResult(
             target_text=f"[OTHER:{target_lang}] {segment.source_text}",
             provider=self.provider_id,

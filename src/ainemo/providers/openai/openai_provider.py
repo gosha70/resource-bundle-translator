@@ -78,9 +78,22 @@ class OpenAIProvider:
         # env-var-free at import time).
         self._client = client
 
-    def translate(self, segment: Segment, target_lang: str) -> ProviderResult:
+    def translate(
+        self,
+        segment: Segment,
+        target_lang: str,
+        *,
+        system_prompt_addendum: str | None = None,
+    ) -> ProviderResult:
         client = self._get_client()
-        system_prompt = SYSTEM_PROMPT
+        # Cycle-3 S6: persona + termbase glossary block lands as a
+        # system-prompt addendum when the pipeline is wired with a
+        # termbase / persona. None preserves cycle-2 behavior.
+        system_prompt = (
+            SYSTEM_PROMPT
+            if not system_prompt_addendum
+            else f"{SYSTEM_PROMPT}\n\n{system_prompt_addendum}"
+        )
         user_message = USER_MESSAGE_TEMPLATE.format(
             from_lang=segment.source_lang,
             to_lang=target_lang,

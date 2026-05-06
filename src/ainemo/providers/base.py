@@ -93,13 +93,29 @@ class Provider(Protocol):
     ``PROVIDER_ID_NLLB``). The TM stores this on every TranslatedSegment
     so caching keys on (segment, target_lang, provider)."""
 
-    def translate(self, segment: Segment, target_lang: str) -> ProviderResult:
+    def translate(
+        self,
+        segment: Segment,
+        target_lang: str,
+        *,
+        system_prompt_addendum: str | None = None,
+    ) -> ProviderResult:
         """Translate ``segment`` to ``target_lang``.
 
         Implementations are responsible for placeholder preservation
         if the underlying model needs it. Errors propagate as
         exceptions; the router (scope 4) wraps with retry+backoff via
         :func:`ainemo.providers._retry.with_retry`.
+
+        ``system_prompt_addendum`` (cycle-3 S6) is a free-text block
+        the pipeline appends to the provider's default system prompt
+        — typically a persona's ``prompt_addendum`` plus a glossary
+        block of termbase hits for the segment. LLM providers
+        concatenate it onto their system message; non-LLM providers
+        (NLLB, OPUS) accept-and-ignore the kwarg because seq2seq
+        models have no system-prompt surface. ``temperature=0`` stays
+        the contract regardless of addendum content (AGENTS.md
+        § Architecture Rules: *Reproducibility by default*).
         """
         ...
 

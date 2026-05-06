@@ -39,7 +39,9 @@ class _StubProvider:
 
     calls: list[tuple[str, str]] = field(default_factory=list)
 
-    def translate(self, segment: Segment, target_lang: str) -> ProviderResult:
+    def translate(
+        self, segment: Segment, target_lang: str, *, system_prompt_addendum: str | None = None
+    ) -> ProviderResult:
         self.calls.append((segment.source_text, target_lang))
         return ProviderResult(
             target_text=self.target_text,
@@ -272,7 +274,9 @@ def test_router_retries_on_rate_limit(tmp_path: Path) -> None:
         def __init__(self) -> None:
             self.calls = 0
 
-        def translate(self, segment: Segment, target_lang: str) -> ProviderResult:
+        def translate(
+            self, segment: Segment, target_lang: str, *, system_prompt_addendum: str | None = None
+        ) -> ProviderResult:
             self.calls += 1
             if self.calls == 1:
                 raise _RateLimitError("simulated")

@@ -35,7 +35,9 @@ _CACHE_HIT_RATE_TARGET = 0.99
 class _PrefixingProvider:
     provider_id: ClassVar[str] = "prefixing"
 
-    def translate(self, segment: Segment, target_lang: str) -> ProviderResult:
+    def translate(
+        self, segment: Segment, target_lang: str, *, system_prompt_addendum: str | None = None
+    ) -> ProviderResult:
         return ProviderResult(
             target_text=f"[{target_lang}] {segment.source_text}",
             provider=self.provider_id,
