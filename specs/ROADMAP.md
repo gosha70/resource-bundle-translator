@@ -40,7 +40,7 @@ Each cycle below is a single Shape-Up bet. Cycles 0–2 are shipped; 3 onward is
 | 0 | Rebrand & Stabilize | 2w | **shipped** (PR #2 merged 2026-05-03; retro: [`retros/cycle-0.md`](retros/cycle-0.md)) | Became AI-NEMO, fixed audit bugs, set up green CI matrix. |
 | 1 | Foundation: Adapters + TM + Validators | 6w | **shipped** (216 tests; CLI ships with `_NoOpProvider` until cycle 2 wires the router) | Four bundle adapters, SQLite TM with embedding fuzzy match, four validators, end-to-end pipeline, `nemo` CLI. |
 | 2 | Provider Abstraction + Gradle Plugin | 6w | **shipped** (PR #7 merged 2026-05-05; retro: [`retros/cycle-2.md`](retros/cycle-2.md)) | Pluggable LLM providers (Anthropic + Ollama added) + first Gradle plugin for JVM `.properties`. |
-| 3 | Concept-Oriented Termbase via Kuzu | 6w | **bet** (locked 2026-05-05; pitch: [`pitches/0003-kuzu-termbase/pitch.md`](pitches/0003-kuzu-termbase/pitch.md)) | Migrate flat termbase to Kuzu, TBX 3.0 I/O, persona system. |
+| 3 | Concept-Oriented Termbase via Kuzu | 6w | **building** (started 2026-05-05; pitch: [`pitches/0003-kuzu-termbase/pitch.md`](pitches/0003-kuzu-termbase/pitch.md); hill: [`pitches/0003-kuzu-termbase/hill.json`](pitches/0003-kuzu-termbase/hill.json)) | Migrate flat termbase to Kuzu, TBX 3.0 I/O, persona system. |
 | 4 | First Domain Pack: legal-en | 6w | stub | Pack format spec, IATE+EuroVoc-derived legal-en pack, Wikidata anchors. |
 | 5 | Reviewer Web UI + QA Layer | 6w | stub | Auto-promotion review queue, confidence scoring, back-translation QA. |
 | 6 | Multi-Platform Expansion | 6w | stub | Maven plugin, npm plugin, `.xcstrings` and Fluent adapters. |
