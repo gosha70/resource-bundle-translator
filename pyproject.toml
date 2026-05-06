@@ -43,6 +43,13 @@ dependencies = [
     "lxml>=5.0",                 # XLIFF 2.0 read/write
     "sentence-transformers>=2.7", # MiniLM embeddings for fuzzy TM lookup
     "numpy>=1.26",               # cosine similarity for TM scan
+    # Cycle 3 — Concept-oriented termbase. Kuzu is an embedded graph DB;
+    # wheels are published for Py 3.10/3.11/3.12 on linux-x86_64,
+    # macos-arm64, and win-amd64. Range pinned to the 0.10–0.11 line
+    # tested on the cycle-3 matrix; bump on cooldown when a Kuzu minor
+    # release lands and the schema-bootstrap idempotency test still
+    # passes on every matrix cell.
+    "kuzu>=0.10,<0.12",
 ]
 
 [project.optional-dependencies]
@@ -116,6 +123,8 @@ module = [
     "lxml.*",
     "sentence_transformers.*",
     "numpy.*",
+    "kuzu",
+    "kuzu.*",
 ]
 ignore_missing_imports = true
 

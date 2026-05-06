@@ -33,7 +33,8 @@ uv.lock
 poetry.lock
 Pipfile.lock
 
-# AI-NEMO local state (cycle-1+ TM database, usage telemetry).
+# AI-NEMO local state (cycle-1+ TM database, usage telemetry,
+# cycle-3+ Kuzu termbase under ``.ainemo/termbase.kuzu/``).
 # Per AGENTS.md § Translation-Domain Conventions: TM is opt-in for
 # git tracking, not default.
 .ainemo/
