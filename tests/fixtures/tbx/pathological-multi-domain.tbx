@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Pathological case: a concept tagged with multiple <descrip type="domain">
+  values. Importer must attach the concept to every named domain via
+  IN_DOMAIN edges (multi-domain concepts are well-defined in TBX 3.0,
+  not unsupported). skipped_unsupported should remain empty.
+-->
+<tbx style="dca" type="TBX-Basic" xml:lang="en"
+     xmlns="urn:iso:std:iso:30042:ed-2">
+  <tbxHeader>
+    <fileDesc>
+      <titleStmt><title>multi-domain</title></titleStmt>
+      <sourceDesc><p>Hand-crafted edge case</p></sourceDesc>
+    </fileDesc>
+  </tbxHeader>
+  <text>
+    <body>
+      <conceptEntry id="c-license">
+        <descrip type="domain">legal</descrip>
+        <descrip type="domain">software</descrip>
+        <langSec xml:lang="en">
+          <termSec>
+            <term>license</term>
+            <definition>A legal grant of permission to use a work under defined conditions.</definition>
+          </termSec>
+        </langSec>
+        <langSec xml:lang="de">
+          <termSec>
+            <term>Lizenz</term>
+          </termSec>
+        </langSec>
+      </conceptEntry>
+    </body>
+  </text>
+</tbx>

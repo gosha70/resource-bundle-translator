@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Pathological case: contains TBX 3.0 elements OUTSIDE the cycle-3
+  documented subset (<xref>, <ref>, transactional <transac> /
+  <transacGrp>, <termNote type="usageStatus">, <descrip type="context">).
+  Importer must:
+  - extract the supported parts (concept + en/de terms);
+  - record every unsupported element in skipped_unsupported with
+    its element name + XPath, so the cycle-3 retro can survey
+    real-world Weblate exports for promote-to-supported candidates.
+-->
+<tbx style="dca" type="TBX-Basic" xml:lang="en"
+     xmlns="urn:iso:std:iso:30042:ed-2">
+  <tbxHeader>
+    <fileDesc>
+      <titleStmt><title>edge-elements</title></titleStmt>
+      <sourceDesc><p>Hand-crafted edge case</p></sourceDesc>
+    </fileDesc>
+  </tbxHeader>
+  <text>
+    <body>
+      <conceptEntry id="c-export">
+        <descrip type="domain">software</descrip>
+        <descrip type="context">Used in the file menu of desktop apps.</descrip>
+        <transacGrp>
+          <transac type="transactionType">origination</transac>
+        </transacGrp>
+        <langSec xml:lang="en">
+          <termSec>
+            <term>export</term>
+            <termNote type="partOfSpeech">verb</termNote>
+            <termNote type="usageStatus">preferred</termNote>
+            <xref type="externalCrossReference" target="https://example.invalid/export"/>
+          </termSec>
+        </langSec>
+        <langSec xml:lang="de">
+          <termSec>
+            <term>exportieren</term>
+            <ref type="seeAlso">c-import</ref>
+          </termSec>
+        </langSec>
+      </conceptEntry>
+    </body>
+  </text>
+</tbx>

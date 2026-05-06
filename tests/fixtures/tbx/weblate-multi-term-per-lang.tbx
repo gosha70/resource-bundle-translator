@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Weblate-style TBX 3.0 export — multiple termSec entries per langSec
+  (synonyms in the same language). Round-trip target: importer must
+  produce empty skipped_unsupported and create one Term row per
+  termSec.
+-->
+<tbx style="dca" type="TBX-Basic" xml:lang="en"
+     xmlns="urn:iso:std:iso:30042:ed-2">
+  <tbxHeader>
+    <fileDesc>
+      <titleStmt><title>synonyms</title></titleStmt>
+      <sourceDesc><p>Weblate glossary export</p></sourceDesc>
+    </fileDesc>
+  </tbxHeader>
+  <text>
+    <body>
+      <conceptEntry id="c-quick">
+        <langSec xml:lang="en">
+          <termSec>
+            <term>quick</term>
+            <termNote type="partOfSpeech">adjective</termNote>
+          </termSec>
+          <termSec>
+            <term>fast</term>
+            <termNote type="partOfSpeech">adjective</termNote>
+          </termSec>
+          <termSec>
+            <term>rapid</term>
+            <termNote type="partOfSpeech">adjective</termNote>
+            <termNote type="register">formal</termNote>
+          </termSec>
+        </langSec>
+        <langSec xml:lang="de">
+          <termSec>
+            <term>schnell</term>
+            <termNote type="partOfSpeech">adjective</termNote>
+          </termSec>
+          <termSec>
+            <term>rasch</term>
+            <termNote type="partOfSpeech">adjective</termNote>
+          </termSec>
+        </langSec>
+      </conceptEntry>
+    </body>
+  </text>
+</tbx>

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Weblate-style TBX 3.0 export — en/de/fr/es four-language glossary.
+  Round-trip target: importer must produce empty skipped_unsupported.
+-->
+<tbx style="dca" type="TBX-Basic" xml:lang="en"
+     xmlns="urn:iso:std:iso:30042:ed-2">
+  <tbxHeader>
+    <fileDesc>
+      <titleStmt><title>multi-lang</title></titleStmt>
+      <sourceDesc><p>Weblate glossary export</p></sourceDesc>
+    </fileDesc>
+  </tbxHeader>
+  <text>
+    <body>
+      <conceptEntry id="c-settings">
+        <langSec xml:lang="en">
+          <termSec>
+            <term>settings</term>
+          </termSec>
+        </langSec>
+        <langSec xml:lang="de">
+          <termSec>
+            <term>Einstellungen</term>
+          </termSec>
+        </langSec>
+        <langSec xml:lang="fr">
+          <termSec>
+            <term>paramètres</term>
+          </termSec>
+        </langSec>
+        <langSec xml:lang="es">
+          <termSec>
+            <term>configuración</term>
+          </termSec>
+        </langSec>
+      </conceptEntry>
+      <conceptEntry id="c-help">
+        <langSec xml:lang="en">
+          <termSec>
+            <term>help</term>
+          </termSec>
+        </langSec>
+        <langSec xml:lang="de">
+          <termSec>
+            <term>Hilfe</term>
+          </termSec>
+        </langSec>
+        <langSec xml:lang="fr">
+          <termSec>
+            <term>aide</term>
+          </termSec>
+        </langSec>
+        <langSec xml:lang="es">
+          <termSec>
+            <term>ayuda</term>
+          </termSec>
+        </langSec>
+      </conceptEntry>
+    </body>
+  </text>
+</tbx>

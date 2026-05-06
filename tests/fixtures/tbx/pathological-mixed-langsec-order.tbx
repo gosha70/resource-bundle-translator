@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Pathological case: langSec elements ordered with non-source langs
+  first (de, fr) before the source language (en) declared by the
+  root @xml:lang. Importer must handle out-of-order langSec without
+  mis-attributing terms; skipped_unsupported should remain empty
+  (langSec ordering is not an unsupported element, just a parsing
+  edge case).
+-->
+<tbx style="dca" type="TBX-Basic" xml:lang="en"
+     xmlns="urn:iso:std:iso:30042:ed-2">
+  <tbxHeader>
+    <fileDesc>
+      <titleStmt><title>mixed-langsec-order</title></titleStmt>
+      <sourceDesc><p>Hand-crafted edge case</p></sourceDesc>
+    </fileDesc>
+  </tbxHeader>
+  <text>
+    <body>
+      <conceptEntry id="c-save">
+        <descrip type="domain">software</descrip>
+        <langSec xml:lang="de">
+          <termSec>
+            <term>speichern</term>
+          </termSec>
+        </langSec>
+        <langSec xml:lang="fr">
+          <termSec>
+            <term>enregistrer</term>
+          </termSec>
+        </langSec>
+        <langSec xml:lang="en">
+          <termSec>
+            <term>save</term>
+            <definition>Persist the current state to storage.</definition>
+          </termSec>
+        </langSec>
+      </conceptEntry>
+    </body>
+  </text>
+</tbx>

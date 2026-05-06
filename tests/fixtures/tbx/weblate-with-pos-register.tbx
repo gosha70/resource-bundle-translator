@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Weblate-style TBX 3.0 export — populated partOfSpeech + register
+  notes on every term so the importer's note-extraction path is
+  exercised on all four register values (formal/casual/neutral)
+  and several POS tags.
+  Round-trip target: importer must produce empty skipped_unsupported.
+-->
+<tbx style="dca" type="TBX-Basic" xml:lang="en"
+     xmlns="urn:iso:std:iso:30042:ed-2">
+  <tbxHeader>
+    <fileDesc>
+      <titleStmt><title>pos-and-register</title></titleStmt>
+      <sourceDesc><p>Weblate glossary export</p></sourceDesc>
+    </fileDesc>
+  </tbxHeader>
+  <text>
+    <body>
+      <conceptEntry id="c-greet">
+        <langSec xml:lang="en">
+          <termSec>
+            <term>hello</term>
+            <termNote type="partOfSpeech">interjection</termNote>
+            <termNote type="register">neutral</termNote>
+          </termSec>
+        </langSec>
+        <langSec xml:lang="de">
+          <termSec>
+            <term>Guten Tag</term>
+            <termNote type="partOfSpeech">interjection</termNote>
+            <termNote type="register">formal</termNote>
+          </termSec>
+        </langSec>
+        <langSec xml:lang="fr">
+          <termSec>
+            <term>salut</term>
+            <termNote type="partOfSpeech">interjection</termNote>
+            <termNote type="register">casual</termNote>
+          </termSec>
+        </langSec>
+      </conceptEntry>
+      <conceptEntry id="c-buy">
+        <langSec xml:lang="en">
+          <termSec>
+            <term>purchase</term>
+            <termNote type="partOfSpeech">verb</termNote>
+            <termNote type="register">formal</termNote>
+          </termSec>
+        </langSec>
+        <langSec xml:lang="de">
+          <termSec>
+            <term>erwerben</term>
+            <termNote type="partOfSpeech">verb</termNote>
+            <termNote type="register">formal</termNote>
+          </termSec>
+        </langSec>
+      </conceptEntry>
+    </body>
+  </text>
+</tbx>

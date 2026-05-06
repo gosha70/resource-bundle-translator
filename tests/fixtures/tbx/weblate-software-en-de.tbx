@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Weblate-style TBX 3.0 export — basic en/de software UI glossary.
+  Mirrors the shape Weblate emits via its "Export glossary as TBX"
+  flow. Round-trip target: importer must produce empty
+  TbxImportReport.skipped_unsupported.
+-->
+<tbx style="dca" type="TBX-Basic" xml:lang="en"
+     xmlns="urn:iso:std:iso:30042:ed-2">
+  <tbxHeader>
+    <fileDesc>
+      <titleStmt><title>software-ui</title></titleStmt>
+      <sourceDesc><p>Weblate glossary export</p></sourceDesc>
+    </fileDesc>
+  </tbxHeader>
+  <text>
+    <body>
+      <conceptEntry id="c-login">
+        <descrip type="domain">software</descrip>
+        <langSec xml:lang="en">
+          <termSec>
+            <term>login</term>
+            <termNote type="partOfSpeech">noun</termNote>
+            <termNote type="register">neutral</termNote>
+            <definition>The act of authenticating into a system.</definition>
+          </termSec>
+        </langSec>
+        <langSec xml:lang="de">
+          <termSec>
+            <term>Anmeldung</term>
+            <termNote type="partOfSpeech">noun</termNote>
+          </termSec>
+        </langSec>
+      </conceptEntry>
+      <conceptEntry id="c-logout">
+        <descrip type="domain">software</descrip>
+        <langSec xml:lang="en">
+          <termSec>
+            <term>logout</term>
+            <termNote type="partOfSpeech">noun</termNote>
+          </termSec>
+        </langSec>
+        <langSec xml:lang="de">
+          <termSec>
+            <term>Abmeldung</term>
+          </termSec>
+        </langSec>
+      </conceptEntry>
+      <conceptEntry id="c-cancel">
+        <descrip type="domain">software</descrip>
+        <langSec xml:lang="en">
+          <termSec>
+            <term>cancel</term>
+            <termNote type="partOfSpeech">verb</termNote>
+          </termSec>
+        </langSec>
+        <langSec xml:lang="de">
+          <termSec>
+            <term>abbrechen</term>
+            <termNote type="partOfSpeech">verb</termNote>
+          </termSec>
+        </langSec>
+      </conceptEntry>
+    </body>
+  </text>
+</tbx>

@@ -227,6 +227,20 @@ class Termbase(Protocol):
         """Insert or update a domain. Idempotent on ``domain_id``."""
         ...
 
+    def attach_concept_to_domain(self, concept_id: str, domain_id: str) -> None:
+        """Idempotent ``(concept)-[:IN_DOMAIN]->(domain)`` edge.
+
+        Cycle-3 S2 (TBX importer) calls this for each
+        ``<descrip type="domain">`` it encounters on a ``<conceptEntry>``;
+        a concept may be attached to multiple domains. The cycle-1+2
+        ``add_concept`` / ``add_domain`` Protocol surface deliberately
+        kept the edge concern out — this is the third Protocol method
+        that touches the (concept, domain) relation, so it lifts here
+        rather than living only on
+        :class:`~ainemo.core.termbase.kuzu.store.KuzuTermbase`.
+        """
+        ...
+
     def add_persona(self, persona: Persona) -> None:
         """Insert or update a persona. Idempotent on ``persona_id``.
 

@@ -4,7 +4,7 @@
   "appetite_weeks": 6,
   "scopes": [
     {"id": 1, "name": "Kuzu schema + Termbase Protocol + KuzuTermbase + entity dataclasses", "status": "done",   "moved_at": "2026-05-05"},
-    {"id": 2, "name": "TBX 3.0 importer (parse Weblate exports)",                            "status": "uphill", "moved_at": "2026-05-05"},
+    {"id": 2, "name": "TBX 3.0 importer (parse Weblate exports)",                            "status": "done",   "moved_at": "2026-05-06"},
     {"id": 3, "name": "TBX 3.0 exporter + Weblate round-trip benchmark",                     "status": "uphill", "moved_at": "2026-05-05"},
     {"id": 4, "name": "Persona system: YAML loader + 3 starter personas",                    "status": "uphill", "moved_at": "2026-05-05"},
     {"id": 5, "name": "Auto-promotion algorithm + nemo termbase CLI",                        "status": "uphill", "moved_at": "2026-05-05"},
