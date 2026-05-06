@@ -1,0 +1,17 @@
+# Cycle-3 starter persona — casual register. Suited to consumer
+# apps, marketing copy, social-media content, and onboarding flows
+# where a conversational tone matches the brand voice.
+persona_id: casual
+name: "Casual register"
+domain_id: null
+register: casual
+forbidden_terms: []
+style_guide_url: null
+glossary_overrides: []
+prompt_addendum: |
+  Translate using a casual, conversational register appropriate
+  for consumer apps, marketing copy, and onboarding flows. Use
+  natural everyday phrasing; contractions are welcome. Prefer the
+  informal second-person ("du" in German, "tu" in French) when
+  addressing the reader. Keep the tone friendly and approachable
+  without becoming flippant. Preserve placeholders exactly.

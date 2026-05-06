@@ -50,6 +50,13 @@ dependencies = [
     # release lands and the schema-bootstrap idempotency test still
     # passes on every matrix cell.
     "kuzu>=0.10,<0.12",
+    # Cycle 3 S4 — persona system. Pydantic v2 enforces the persona
+    # YAML schema (per pitch Q2: 4 mandatory + 4 optional fields,
+    # `provider_hints` rejected via `extra='forbid'`). PyYAML reads
+    # the on-disk *.yaml files. Both are widely-used; the version
+    # ranges target the supported py-3.10/3.11/3.12 matrix.
+    "pydantic>=2.0",
+    "PyYAML>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -125,6 +132,8 @@ module = [
     "numpy.*",
     "kuzu",
     "kuzu.*",
+    "yaml",
+    "yaml.*",
 ]
 ignore_missing_imports = true
 

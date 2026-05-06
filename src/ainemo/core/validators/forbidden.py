@@ -5,6 +5,13 @@ brand names that should be transliterated rather than translated,
 trademarked terms with strict spellings, regulatory red flags. The
 list is supplied at construction time; the validator is otherwise
 config-free.
+
+Cycle-3 S4 added :meth:`ForbiddenTermsValidator.from_persona` so the
+list can come from a :class:`Persona` instead of CLI flags. The
+cycle-1 tuple-of-strings constructor stays for backward compat
+(legacy ``--forbidden-term`` repeatable flag), but persona-driven
+construction is the cycle-3+ default once the pipeline-integration
+scope (S6) lands.
 """
 
 from __future__ import annotations
@@ -13,6 +20,7 @@ import re
 from typing import ClassVar
 
 from ainemo.core.segment import Segment, TranslatedSegment
+from ainemo.core.termbase.base import Persona
 from ainemo.core.validators.base import (
     VIOLATION_SEVERITY_ERROR,
     Violation,
@@ -48,6 +56,28 @@ class ForbiddenTermsValidator:
             if word_boundary:
                 escaped = rf"\b{escaped}\b"
             self._patterns.append((term, re.compile(escaped, flags)))
+
+    @classmethod
+    def from_persona(
+        cls,
+        persona: Persona,
+        *,
+        case_insensitive: bool = True,
+        word_boundary: bool = True,
+    ) -> ForbiddenTermsValidator:
+        """Build a validator from ``persona.forbidden_terms``.
+
+        Cycle-3 S4 — the cycle-1 ``tuple[str, ...]`` constructor stays
+        for legacy callers; this classmethod is the persona-aware
+        path that domain packs (cycle 4+) and the cycle-3 S6 pipeline
+        integration use. Match flags default to the same values as
+        the legacy constructor so behavior is otherwise identical.
+        """
+        return cls(
+            persona.forbidden_terms,
+            case_insensitive=case_insensitive,
+            word_boundary=word_boundary,
+        )
 
     def check(
         self,
