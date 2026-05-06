@@ -38,7 +38,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Final, Sequence
+from typing import Any, Final, Iterator, Sequence
 
 import kuzu
 
@@ -54,6 +54,7 @@ from ainemo.core.termbase._ids import (
 )
 from ainemo.core.termbase.base import (
     Concept,
+    ConceptEntry,
     ConceptHit,
     Domain,
     GlossaryOverride,
@@ -271,6 +272,47 @@ class KuzuTermbase:
             persona_count=persona_count,
         )
 
+    def iter_concept_entries(self, domain_id: str | None = None) -> Iterator[ConceptEntry]:
+        # Cycle-3 S3 (TBX exporter) is the first consumer. Yields in
+        # `concept_id` ascending order so re-export is byte-stable
+        # (canonical-XML round-trip is a hard contract). Implementation:
+        # one MATCH per concept fetches concept row + terms + domain
+        # ids; in-memory sorts keep the SQL simple at cycle-3 scale
+        # (5k concepts upper bound per pitch § Test strategy).
+        if domain_id is None:
+            concept_rows = _all_rows(
+                self._conn.execute(
+                    f"MATCH (c:{NODE_LABEL_CONCEPT}) "
+                    "RETURN c.concept_id, c.qid, c.definition, c.created_at "
+                    "ORDER BY c.concept_id"
+                )
+            )
+        else:
+            concept_rows = _all_rows(
+                self._conn.execute(
+                    f"MATCH (c:{NODE_LABEL_CONCEPT})"
+                    f"-[:{REL_IN_DOMAIN}]->(d:{NODE_LABEL_DOMAIN} "
+                    f"     {{domain_id: $did}}) "
+                    "RETURN c.concept_id, c.qid, c.definition, c.created_at "
+                    "ORDER BY c.concept_id",
+                    {"did": domain_id},
+                )
+            )
+        for row in concept_rows:
+            concept = Concept(
+                concept_id=str(row[0]),
+                qid=None if row[1] is None else str(row[1]),
+                definition=None if row[2] is None else str(row[2]),
+                created_at=int(row[3]),
+            )
+            terms = self._fetch_all_terms_for_concept(concept.concept_id)
+            domain_ids = self._fetch_domain_ids_for_concept(concept.concept_id)
+            yield ConceptEntry(
+                concept=concept,
+                terms=terms,
+                domain_ids=domain_ids,
+            )
+
     # --- Convenience methods (not part of the Protocol but used by
     #     tests and by S6 pipeline integration; the Protocol surface
     #     intentionally stays narrow). ---
@@ -442,6 +484,30 @@ class KuzuTermbase:
             {"cid": concept_id, "lang": lang},
         )
         return tuple(_row_to_term(row) for row in _all_rows(result))
+
+    def _fetch_all_terms_for_concept(self, concept_id: str) -> tuple[Term, ...]:
+        # Used by iter_concept_entries — returns all terms for a
+        # concept across every language, sorted (lang, surface,
+        # term_id) ascending so the TBX exporter's <langSec> /
+        # <termSec> output is byte-stable across runs.
+        result = self._conn.execute(
+            f"MATCH (c:{NODE_LABEL_CONCEPT} {{concept_id: $cid}})"
+            f"-[:{REL_HAS_TERM}]->(t:{NODE_LABEL_TERM}) "
+            "RETURN t.term_id, t.concept_id, t.lang, t.surface, "
+            "       t.register, t.part_of_speech, t.source "
+            "ORDER BY t.lang, t.surface, t.term_id",
+            {"cid": concept_id},
+        )
+        return tuple(_row_to_term(row) for row in _all_rows(result))
+
+    def _fetch_domain_ids_for_concept(self, concept_id: str) -> tuple[str, ...]:
+        result = self._conn.execute(
+            f"MATCH (c:{NODE_LABEL_CONCEPT} {{concept_id: $cid}})"
+            f"-[:{REL_IN_DOMAIN}]->(d:{NODE_LABEL_DOMAIN}) "
+            "RETURN d.domain_id ORDER BY d.domain_id",
+            {"cid": concept_id},
+        )
+        return tuple(str(row[0]) for row in _all_rows(result))
 
 
 # --- Module-level helpers ---

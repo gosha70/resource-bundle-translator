@@ -28,22 +28,14 @@ from __future__ import annotations
 
 import itertools
 from pathlib import Path
-from typing import Sequence
 
 import pytest
 
 from ainemo.core.termbase._ids import TERM_SOURCE_TBX_IMPORT
-from ainemo.core.termbase.base import (
-    Concept,
-    ConceptHit,
-    Domain,
-    Persona,
-    Term,
-    Termbase,
-    TermbaseStats,
-)
+from ainemo.core.termbase.base import Termbase
 from ainemo.core.termbase.kuzu.store import KuzuTermbase
 from ainemo.core.termbase.tbx.importer import TbxImporter, TbxImportReport
+from tests.termbase_stub import RecordingTermbase
 
 pytestmark = pytest.mark.unit
 
@@ -51,78 +43,13 @@ pytestmark = pytest.mark.unit
 _FIXTURE_DIR = Path(__file__).parent.parent / "fixtures" / "tbx"
 
 
-# --- Recording stub: implements the Termbase Protocol with an
-#     in-memory dict so tests can assert exactly what the importer
-#     wrote without spinning up Kuzu. The on-disk path is covered by
-#     `test_importer_into_kuzu_round_trip`. ---
-
-
-class _RecordingTermbase:
-    """In-process Termbase test double — records every call."""
-
-    def __init__(self) -> None:
-        self.concepts: dict[str, Concept] = {}
-        self.terms_by_concept: dict[str, list[Term]] = {}
-        self.domains: dict[str, Domain] = {}
-        self.concept_to_domains: dict[str, list[str]] = {}
-        self.personas: dict[str, Persona] = {}
-
-    def add_concept(self, concept: Concept, terms: Sequence[Term]) -> None:
-        for term in terms:
-            if term.concept_id != concept.concept_id:
-                raise ValueError(
-                    f"Term {term.term_id!r} has concept_id={term.concept_id!r} "
-                    f"but is being added under concept {concept.concept_id!r}"
-                )
-        self.concepts[concept.concept_id] = concept
-        self.terms_by_concept.setdefault(concept.concept_id, []).extend(terms)
-
-    def add_domain(self, domain: Domain) -> None:
-        self.domains[domain.domain_id] = domain
-
-    def attach_concept_to_domain(self, concept_id: str, domain_id: str) -> None:
-        attached = self.concept_to_domains.setdefault(concept_id, [])
-        if domain_id not in attached:
-            attached.append(domain_id)
-
-    def add_persona(self, persona: Persona) -> None:
-        self.personas[persona.persona_id] = persona
-
-    def get_persona(self, persona_id: str) -> Persona | None:
-        return self.personas.get(persona_id)
-
-    def list_personas(self) -> tuple[Persona, ...]:
-        return tuple(self.personas[pid] for pid in sorted(self.personas))
-
-    def lookup_concepts_for(
-        self,
-        source_text: str,
-        source_lang: str,
-        target_lang: str,
-        domain_id: str | None = None,
-        max_hits: int = 16,
-    ) -> tuple[ConceptHit, ...]:
-        return ()  # not exercised by the importer
-
-    def stats(self) -> TermbaseStats:
-        return TermbaseStats(
-            concept_count=len(self.concepts),
-            term_count_by_lang=(),
-            domain_count=len(self.domains),
-            persona_count=len(self.personas),
-        )
-
-    def all_terms(self) -> list[Term]:
-        return [t for terms in self.terms_by_concept.values() for t in terms]
+@pytest.fixture
+def stub() -> RecordingTermbase:
+    return RecordingTermbase()
 
 
 @pytest.fixture
-def stub() -> _RecordingTermbase:
-    return _RecordingTermbase()
-
-
-@pytest.fixture
-def importer(stub: _RecordingTermbase) -> TbxImporter:
+def importer(stub: RecordingTermbase) -> TbxImporter:
     counter = itertools.count()
     return TbxImporter(
         stub,
@@ -138,7 +65,7 @@ def _import(importer: TbxImporter, fixture_name: str) -> TbxImportReport:
 # --- Protocol contract ---
 
 
-def test_recording_stub_satisfies_protocol(stub: _RecordingTermbase) -> None:
+def test_recording_stub_satisfies_protocol(stub: RecordingTermbase) -> None:
     # Pin that the test double fully implements `Termbase` so it can
     # stand in for `KuzuTermbase` in cycle-3 S6 pipeline tests too.
     assert isinstance(stub, Termbase)
@@ -170,7 +97,7 @@ def test_weblate_fixtures_have_no_skipped_elements(importer: TbxImporter, fixtur
 
 
 def test_software_en_de_extracts_terms_and_domain(
-    importer: TbxImporter, stub: _RecordingTermbase
+    importer: TbxImporter, stub: RecordingTermbase
 ) -> None:
     report = _import(importer, "weblate-software-en-de.tbx")
     assert report.concepts_added == 3
@@ -199,7 +126,7 @@ def test_software_en_de_extracts_terms_and_domain(
     assert by_lang["de"].register is None  # not present in the fixture
 
 
-def test_multi_lang_fixture(importer: TbxImporter, stub: _RecordingTermbase) -> None:
+def test_multi_lang_fixture(importer: TbxImporter, stub: RecordingTermbase) -> None:
     report = _import(importer, "weblate-multi-lang.tbx")
     assert report.concepts_added == 2
     assert report.terms_added == 8  # 2 concepts × 4 langs
@@ -213,7 +140,7 @@ def test_multi_lang_fixture(importer: TbxImporter, stub: _RecordingTermbase) -> 
     }
 
 
-def test_pos_and_register_fixture(importer: TbxImporter, stub: _RecordingTermbase) -> None:
+def test_pos_and_register_fixture(importer: TbxImporter, stub: RecordingTermbase) -> None:
     _import(importer, "weblate-with-pos-register.tbx")
     greet_terms = stub.terms_by_concept["c-greet"]
     by_lang = {t.lang: t for t in greet_terms}
@@ -223,7 +150,7 @@ def test_pos_and_register_fixture(importer: TbxImporter, stub: _RecordingTermbas
     assert all(t.part_of_speech == "interjection" for t in greet_terms)
 
 
-def test_multi_term_per_lang_fixture(importer: TbxImporter, stub: _RecordingTermbase) -> None:
+def test_multi_term_per_lang_fixture(importer: TbxImporter, stub: RecordingTermbase) -> None:
     report = _import(importer, "weblate-multi-term-per-lang.tbx")
     assert report.concepts_added == 1
     assert report.terms_added == 5  # 3 en synonyms + 2 de synonyms
@@ -231,7 +158,7 @@ def test_multi_term_per_lang_fixture(importer: TbxImporter, stub: _RecordingTerm
     assert en_terms == ["fast", "quick", "rapid"]
 
 
-def test_with_definitions_fixture(importer: TbxImporter, stub: _RecordingTermbase) -> None:
+def test_with_definitions_fixture(importer: TbxImporter, stub: RecordingTermbase) -> None:
     _import(importer, "weblate-with-definitions.tbx")
     db = stub.concepts["c-database"]
     cache = stub.concepts["c-cache"]
@@ -244,7 +171,7 @@ def test_with_definitions_fixture(importer: TbxImporter, stub: _RecordingTermbas
 
 
 def test_mixed_langsec_order_attributes_terms_correctly(
-    importer: TbxImporter, stub: _RecordingTermbase
+    importer: TbxImporter, stub: RecordingTermbase
 ) -> None:
     # de + fr appear before en in the conceptEntry; the importer
     # must still tag each term with its langSec's @xml:lang and
@@ -258,7 +185,7 @@ def test_mixed_langsec_order_attributes_terms_correctly(
 
 
 def test_missing_definitions_leaves_concept_definition_none(
-    importer: TbxImporter, stub: _RecordingTermbase
+    importer: TbxImporter, stub: RecordingTermbase
 ) -> None:
     report = _import(importer, "pathological-missing-definitions.tbx")
     assert report.skipped_unsupported == ()
@@ -267,7 +194,7 @@ def test_missing_definitions_leaves_concept_definition_none(
 
 
 def test_multi_domain_concept_attaches_to_each_domain(
-    importer: TbxImporter, stub: _RecordingTermbase
+    importer: TbxImporter, stub: RecordingTermbase
 ) -> None:
     report = _import(importer, "pathological-multi-domain.tbx")
     assert report.skipped_unsupported == ()
@@ -278,7 +205,7 @@ def test_multi_domain_concept_attaches_to_each_domain(
 
 
 def test_unsupported_elements_recorded_with_name_and_xpath(
-    importer: TbxImporter, stub: _RecordingTermbase
+    importer: TbxImporter, stub: RecordingTermbase
 ) -> None:
     report = _import(importer, "pathological-unsupported-elements.tbx")
     skipped = report.skipped_unsupported
@@ -323,7 +250,7 @@ def test_termsec_without_id_synthesizes_deterministically_and_reports_count(
 
 
 def test_termsec_synthesized_ids_are_stable_across_calls(
-    importer: TbxImporter, stub: _RecordingTermbase
+    importer: TbxImporter, stub: RecordingTermbase
 ) -> None:
     # Importing the same fixture twice into the same termbase must
     # produce identical term ids, so the upsert layer collapses the
@@ -336,7 +263,7 @@ def test_termsec_synthesized_ids_are_stable_across_calls(
 
 
 def test_concept_with_explicit_id_is_idempotent_on_reimport(
-    stub: _RecordingTermbase,
+    stub: RecordingTermbase,
 ) -> None:
     # Re-import on the same stub must not grow the concept count.
     # `new_id` only fires for conceptEntry without @id (Weblate always
@@ -357,7 +284,7 @@ def test_concept_with_explicit_id_is_idempotent_on_reimport(
 
 
 def test_default_constructors_run_without_injection(
-    stub: _RecordingTermbase,
+    stub: RecordingTermbase,
 ) -> None:
     # Smoke: TbxImporter without new_id/now overrides falls back to
     # uuid.uuid4 + time.time. Verify on a tiny fixture so the test
@@ -416,7 +343,7 @@ def test_importer_kuzu_re_import_does_not_duplicate(tmp_path: Path) -> None:
 
 
 def test_import_bytes_supports_namespace_free_documents(
-    stub: _RecordingTermbase, importer: TbxImporter
+    stub: RecordingTermbase, importer: TbxImporter
 ) -> None:
     # Hand-edited TBX-ish documents sometimes omit the namespace.
     # The `_findall_local` helper accepts both shapes; pin it.

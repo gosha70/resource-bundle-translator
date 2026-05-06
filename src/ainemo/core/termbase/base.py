@@ -35,7 +35,7 @@ Entity model rationale (per pitch § Solution shape):
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol, Sequence, runtime_checkable
+from typing import Iterator, Protocol, Sequence, runtime_checkable
 
 
 @dataclass(frozen=True)
@@ -182,6 +182,30 @@ class TermbaseStats:
     persona_count: int
 
 
+@dataclass(frozen=True)
+class ConceptEntry:
+    """One concept plus all its terms and domain memberships.
+
+    Bundled record returned by
+    :meth:`Termbase.iter_concept_entries`. Cycle-3 S3 (TBX exporter)
+    is the first consumer; the cycle-5 reviewer UI consumes it via
+    the same Protocol surface. Bundling the three reads into one
+    record means concrete backends can fetch them in a single graph
+    traversal (Kuzu) rather than three separate round trips.
+    """
+
+    concept: Concept
+    terms: tuple[Term, ...]
+    """All terms for the concept across every language. Implementations
+    return them sorted by ``(lang, surface, term_id)`` ascending so
+    consumers (e.g. the TBX exporter) get deterministic output without
+    having to re-sort."""
+
+    domain_ids: tuple[str, ...]
+    """Domain ids the concept is attached to via IN_DOMAIN, sorted
+    ascending. Empty when the concept is not in any domain."""
+
+
 @runtime_checkable
 class Termbase(Protocol):
     """Concept-oriented terminology store.
@@ -261,6 +285,17 @@ class Termbase(Protocol):
         """Aggregate counts. Used by ``nemo termbase stats`` (S5)."""
         ...
 
+    def iter_concept_entries(self, domain_id: str | None = None) -> Iterator[ConceptEntry]:
+        """Yield every concept (optionally narrowed to ``domain_id``)
+        with its terms and domain memberships, in stable order.
+
+        Implementations MUST yield concepts in ``concept_id``
+        ascending order so the cycle-3 S3 TBX exporter produces
+        byte-stable output across runs (round-trip determinism is
+        a hard contract for the exporter).
+        """
+        ...
+
 
 __all__ = [
     "Concept",
@@ -269,6 +304,7 @@ __all__ = [
     "GlossaryOverride",
     "Persona",
     "ConceptHit",
+    "ConceptEntry",
     "TermbaseStats",
     "Termbase",
 ]
