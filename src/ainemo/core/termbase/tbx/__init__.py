@@ -11,6 +11,7 @@ so the cycle-3 retro can survey real-world exports and decide which
 elements to promote to the supported set in cooldown.
 """
 
+from ainemo.core.termbase.tbx.exporter import TbxExporter
 from ainemo.core.termbase.tbx.importer import TbxImporter, TbxImportReport
 
-__all__ = ["TbxImporter", "TbxImportReport"]
+__all__ = ["TbxExporter", "TbxImporter", "TbxImportReport"]
