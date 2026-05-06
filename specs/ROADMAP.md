@@ -40,7 +40,7 @@ Each cycle below is a single Shape-Up bet. Cycles 0–2 are shipped; 3 onward is
 | 0 | Rebrand & Stabilize | 2w | **shipped** (PR #2 merged 2026-05-03; retro: [`retros/cycle-0.md`](retros/cycle-0.md)) | Became AI-NEMO, fixed audit bugs, set up green CI matrix. |
 | 1 | Foundation: Adapters + TM + Validators | 6w | **shipped** (216 tests; CLI ships with `_NoOpProvider` until cycle 2 wires the router) | Four bundle adapters, SQLite TM with embedding fuzzy match, four validators, end-to-end pipeline, `nemo` CLI. |
 | 2 | Provider Abstraction + Gradle Plugin | 6w | **shipped** (PR #7 merged 2026-05-05; retro: [`retros/cycle-2.md`](retros/cycle-2.md)) | Pluggable LLM providers (Anthropic + Ollama added) + first Gradle plugin for JVM `.properties`. |
-| 3 | Concept-Oriented Termbase via Kuzu | 6w | **building** (started 2026-05-05; pitch: [`pitches/0003-kuzu-termbase/pitch.md`](pitches/0003-kuzu-termbase/pitch.md); hill: [`pitches/0003-kuzu-termbase/hill.json`](pitches/0003-kuzu-termbase/hill.json)) | Migrate flat termbase to Kuzu, TBX 3.0 I/O, persona system. |
+| 3 | Concept-Oriented Termbase via Kuzu | 6w | **shipped** (PRs #8/#9/#10/#11/#12/#13 merged 2026-05-06; pitch: [`pitches/0003-kuzu-termbase/pitch.md`](pitches/0003-kuzu-termbase/pitch.md); retro: see cooldown) | Concept/Term/Domain/Persona graph in Kuzu, TBX 3.0 round-trip, three starter personas, auto-promotion CLI, pipeline + daemon persona injection. |
 | 4 | First Domain Pack: legal-en | 6w | stub | Pack format spec, IATE+EuroVoc-derived legal-en pack, Wikidata anchors. |
 | 5 | Reviewer Web UI + QA Layer | 6w | stub | Auto-promotion review queue, confidence scoring, back-translation QA. |
 | 6 | Multi-Platform Expansion | 6w | stub | Maven plugin, npm plugin, `.xcstrings` and Fluent adapters. |
@@ -92,13 +92,36 @@ Plus a Medium-severity backlog (libs version catalog, group/version source-of-tr
 
 **Scope-hammered out**: Maven plugin, npm plugin (cycle 6), Android `strings.xml` (PhilKes already owns that), web UI (cycle 5), `.xcstrings` / Fluent / `.resx`, KG / termbase work.
 
-## Cycle 3 — Concept-Oriented Termbase via Kuzu (6 weeks)
+## Cycle 3 — Concept-Oriented Termbase via Kuzu (shipped)
 
-**Provisional outcome**: Flat YAML termbase replaced by Kuzu. Schema includes `Concept`, `Term`, `Domain`, `Persona`, `Segment`. TBX 3.0 (ISO 30042) round-trip import/export — must be lossless against Weblate's TBX exports. Persona system with three starter personas (`software-ui`, `formal`, `casual`). Auto-promotion from TM into termbase based on frequency + consistency thresholds, gated behind a CLI review command.
+**Pitch**: [pitches/0003-kuzu-termbase/pitch.md](pitches/0003-kuzu-termbase/pitch.md) — status `shipped`.
+**Shipped**: 2026-05-06 via PRs [#8](https://github.com/gosha70/resource-bundle-translator/pull/8) (S1: Kuzu schema + Termbase Protocol), [#9](https://github.com/gosha70/resource-bundle-translator/pull/9) (S2: TBX importer), [#10](https://github.com/gosha70/resource-bundle-translator/pull/10) (S3: TBX exporter + round-trip benchmark), [#11](https://github.com/gosha70/resource-bundle-translator/pull/11) (S4: persona system), [#12](https://github.com/gosha70/resource-bundle-translator/pull/12) (S5: auto-promotion + CLI), [#13](https://github.com/gosha70/resource-bundle-translator/pull/13) (S6: pipeline integration), and S7 (this commit, docs). Retro: lands at cooldown.
 
-**Why this is the moat-builder**: this is where AI-NEMO stops being "yet another LLM i18n tool" and becomes a terminology platform. Without this cycle, the differentiation pitch falls apart.
+All 7 scopes landed inside the 6-week appetite (actual session execution: hours). Cycle 3 ships the **concept-oriented termbase** — `Concept`, `Term`, `Domain`, `Persona`, `Segment` modeled in Kuzu under `.ainemo/termbase.kuzu/`; a Pydantic-enforced persona YAML schema with three starter YAMLs (`software-ui`, `formal`, `casual`); TBX 3.0 (ISO 30042) read/write of the documented Weblate-subset with byte-stable round-trip; auto-promotion of stable TM n-grams into the termbase via `find_candidates(tm, ...)`; the `nemo termbase` CLI surface (`init` / `import` / `export` / `promote --review|--accept-all` / `stats`); pipeline + daemon persona-aware prompt injection (`Persona.prompt_addendum` + glossary block of termbase concept hits → provider system prompt); and full reference docs ([`docs/termbase.md`](../docs/termbase.md), [`docs/personas.md`](../docs/personas.md)).
 
-**Likely rabbit holes to avoid**: building a graph query DSL on top of Cypher; modeling every TBX-3 corner case (we support a documented subset); building the reviewer UI here (that's cycle 5).
+Nine reviewer-validated bug fixes landed mid-cycle, every one with a regression test:
+
+- **S1 P2** — `add_concept` left an orphan concept on rejected term insert; fixed by validate-before-write atomicity.
+- **S2 P2** — Weblate re-import duplicated every term; fixed by deriving stable `(concept_id, lang, surface)` term ids when `termSec @id` is absent.
+- **S2 P3** — importer docs still described UUID4 term ids; rewritten to distinguish the two `@id`-absent paths.
+- **S4 P2** — required `forbidden_terms` was silently defaulted; dropped the Pydantic default so omission raises.
+- **S4 P2** — invalid `register` values were accepted; tightened to `Literal["formal", "casual", "neutral"] | None`.
+- **S5 P2** — promotion frequency counted translation rows, not distinct segments; fixed by fingerprint bucketing.
+- **S5 P2** — TM iterator materialized the full result set via `fetchall()`; fixed by streaming the cursor directly.
+- **S5 P2** — `nemo termbase promote --accept-all` duplicated concepts on re-run; fixed by content-addressed `tm-promo-<sha256>` ids.
+- **S6 P2** — pipeline never threaded `persona`/`domain` to `ProviderRouter.translate()` so cycle-2 routing rules with persona/domain matchers never fired; fixed in `_call_provider`.
+
+**Cycle-3 limitations carried forward** (cooldown candidates):
+
+- TBX round-trip parity against *real* Weblate exports is asserted manually via [`tests/benchmarks/cycle-3-tbx-roundtrip.md`](../tests/benchmarks/cycle-3-tbx-roundtrip.md), not in CI. The in-tree round-trip (5 hand-crafted Weblate-style fixtures) is byte-stable; cooldown runs the manual benchmark on ≥ 3 real exports and decides which skipped elements to promote to the supported subset.
+- `--termbase-path` defaults to `.ainemo/termbase.kuzu` (per-project). A per-user / global override flag is a 5-line addition deferred to cooldown.
+- Termbase term lookup uses literal n-gram match; embedding-based concept retrieval is benchmark-driven and deferred to cycle 4+ if recall on real corpora proves insufficient.
+- Wikidata QID is a nullable column on `Concept` only; cycle 4's `legal-en` pack is what actually populates it.
+- Reviewer UI is out of scope (cycle 5). The `nemo termbase promote --review` CLI loop is the cycle-3 surface for accepting/rejecting auto-promoted candidates.
+
+**Why this is the moat-builder**: this is where AI-NEMO stops being "yet another LLM i18n tool" and becomes a terminology platform. Cycle 4's domain packs (`legal-en`, ...) plug directly into the cycle-3 termbase + persona + auto-promotion substrate.
+
+**Scope-hammered out**: graph query DSL on top of Cypher (use Kuzu's API directly), pre-populating concepts from external ontologies (cycle 4+), embedding-based term lookup (deferred until benchmark warrants), reviewer web UI (cycle 5), TBX 2.x compatibility (3.0 only).
 
 ## Cycle 4 — First Domain Pack: legal-en (6 weeks)
 

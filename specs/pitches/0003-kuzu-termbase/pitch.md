@@ -2,7 +2,7 @@
 pitch_id: 0003-kuzu-termbase
 title: "Cycle 3 — Concept-Oriented Termbase via Kuzu"
 appetite: 6w
-bet_status: building
+bet_status: shipped
 cycle: "03"
 circuit_breaker: "If lossless TBX 3.0 round-trip against Weblate's exports (S2+S3) is still uphill at week 4, ship the Kuzu schema + persona system + pipeline integration + auto-promotion (S1, S4, S5, S6) with TBX import-only — round-trip parity with Weblate moves to cycle-3 cooldown, and TBX export ships as a documented-subset best-effort writer rather than blocking the cycle."
 shaped_by: gosha70
@@ -20,7 +20,7 @@ shaped_date: 2026-05-04
 
 - **ID**: 0003
 - **Appetite**: 6w (wall-clock ceiling; actual session execution ≪ appetite)
-- **Status**: building
+- **Status**: shipped (2026-05-06; PRs #8/#9/#10/#11/#12/#13 merged; S7 docs in this commit)
 - **Owner**: gosha70
 
 ## Problem
@@ -431,3 +431,4 @@ Context for "exhausted" on this pitch: TBX I/O is the most novel surface in cycl
 | 2026-05-04 | shaped | Scopes sized; circuit breaker pinned around TBX round-trip; two genuine open questions for /bet (promotion thresholds + persona YAML schema). |
 | 2026-05-05 | bet | /bet locked. Q1: take proposed defaults (`freq_min=5`, `consistency_min=0.9`). Q2: take 4 of 5 optional persona fields; **drop `provider_hints`** in favor of cycle-2's existing `RoutingConfig` `persona`/`domain` matching. No other open questions; no scope adjustments. |
 | 2026-05-05 | building | /cycle-start: `hill.json` initialized with all 7 scopes uphill (S1–S7); `bet_status` flipped `bet` → `building`; ROADMAP cycle-3 row updated `bet` → `building`. Cycle is open for execution. |
+| 2026-05-06 | shipped | All 7 scopes done. PRs #8 (S1) / #9 (S2) / #10 (S3) / #11 (S4) / #12 (S5) / #13 (S6) merged; S7 docs land in this commit. Nine reviewer-validated bug fixes shipped with regression tests (see ROADMAP § Cycle 3). 500 fast-suite tests, mypy strict / ruff / format clean. Circuit breaker did not fire — TBX round-trip on the 5 hand-crafted Weblate-style fixtures is byte-stable; parity against real Weblate exports is the cooldown manual-benchmark item per [`tests/benchmarks/cycle-3-tbx-roundtrip.md`](../../../tests/benchmarks/cycle-3-tbx-roundtrip.md). |

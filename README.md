@@ -34,7 +34,7 @@ This installs the package in editable mode plus the dev tooling (`ruff`, `mypy`,
 
 ### CLI
 
-The `nemo` console script ships five subcommands as of cycle 2.
+The `nemo` console script ships five cycle-2 subcommands plus the cycle-3 `termbase` family.
 
 ```bash
 # Translate a source bundle to one or more target languages.
@@ -67,6 +67,13 @@ nemo provider stats [--usage-log PATH] [--since 2026-05-01]
 
 # Run a long-lived JSON-over-stdio daemon (used by the Gradle plugin).
 nemo daemon [--usage-log PATH]
+
+# Manage the cycle-3 concept-oriented termbase.
+nemo termbase init [--persona-dir PATH]
+nemo termbase import path/to/glossary.tbx
+nemo termbase export path/to/out.tbx [--domain-id software]
+nemo termbase promote --source-lang en --target-lang de [--review|--accept-all]
+nemo termbase stats
 ```
 
 `nemo translate` infers the bundle format from the source path's extension; pass `--format` to override. See [`docs/adapters.md`](docs/adapters.md) for the format → adapter table and [`docs/providers.md`](docs/providers.md) for per-provider prereqs, default models, env vars (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OLLAMA_HOST`), and cost tracking.
@@ -137,6 +144,29 @@ Cycle 2 finalized the `Provider` Protocol: every backend implements `translate(s
 | `ollama` | local LLM (HTTP) | `llama3.2` | no (local) | needs running daemon at `OLLAMA_HOST` (default `http://localhost:11434`) |
 
 All cloud providers run with `temperature=0` for reproducibility (per AGENTS.md § Architecture Rules). See [`docs/providers.md`](docs/providers.md) for per-provider prereqs, full pricing tables, supported language pairs, and the "adding a new provider" checklist.
+
+## Termbase + personas
+
+Cycle 3 ships AI-NEMO's moat: a Kuzu-backed **concept-oriented termbase** plus a **persona system** that injects a per-call prompt addendum into the provider's system prompt.
+
+```bash
+# One-time setup — creates .ainemo/termbase.kuzu and syncs the three
+# starter personas (software-ui, formal, casual).
+nemo termbase init
+
+# Import a TBX 3.0 glossary (e.g. exported from Weblate).
+nemo termbase import glossary.tbx
+
+# Promote stable n-grams from the TM into the termbase, gated behind
+# an interactive y/n/q review loop.
+nemo termbase promote --source-lang en --target-lang de
+```
+
+When the pipeline is constructed with a termbase + persona — for example via the daemon's `persona_id` envelope field — every TM-miss segment runs `termbase.lookup_concepts_for(...)` against the configured persona's domain, formats the hits as a glossary block, and prepends the persona's `prompt_addendum`. The combined string lands as a system-prompt addendum on the provider call. LLM providers (OpenAI / Anthropic / Ollama) consume it; seq2seq providers (NLLB / OPUS) accept-and-ignore. `temperature=0` is preserved across the change.
+
+When neither a termbase nor a persona is configured, the pipeline behaves identically to cycles 1+2 — the cycle-1 e2e regress-clean contract holds.
+
+See [`docs/termbase.md`](docs/termbase.md) for the concept model, schema, TBX subset table, and `nemo termbase` CLI reference, and [`docs/personas.md`](docs/personas.md) for the YAML schema, starter personas, authoring guide, and prompt-injection mechanics.
 
 ## Development
 

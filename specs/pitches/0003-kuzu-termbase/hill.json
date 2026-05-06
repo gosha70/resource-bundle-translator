@@ -9,6 +9,6 @@
     {"id": 4, "name": "Persona system: YAML loader + 3 starter personas",                    "status": "done",   "moved_at": "2026-05-06"},
     {"id": 5, "name": "Auto-promotion algorithm + nemo termbase CLI",                        "status": "done",   "moved_at": "2026-05-06"},
     {"id": 6, "name": "Pipeline integration: termbase + persona prompt injection",           "status": "done",   "moved_at": "2026-05-06"},
-    {"id": 7, "name": "Documentation + cycle-3 outcomes hooks",                              "status": "uphill", "moved_at": "2026-05-05"}
+    {"id": 7, "name": "Documentation + cycle-3 outcomes hooks",                              "status": "done",   "moved_at": "2026-05-06"}
   ]
 }
