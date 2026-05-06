@@ -37,7 +37,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Final, Iterator, Protocol, runtime_checkable
+from typing import Any, Callable, Final, Iterator, Protocol, cast, runtime_checkable
 
 import numpy as np
 from numpy.typing import NDArray
@@ -45,10 +45,13 @@ from numpy.typing import NDArray
 from ainemo.core.segment import (
     TRANSLATION_SOURCE_EXACT_TM,
     TRANSLATION_SOURCE_FUZZY_TM,
+    TRANSLATION_SOURCE_MANUAL,
+    TRANSLATION_SOURCE_PROVIDER,
     Placeholder,
     PlaceholderKind,
     Segment,
     TranslatedSegment,
+    TranslationSource,
 )
 from ainemo.core.tm.base import (
     DEFAULT_FUZZY_THRESHOLD,
@@ -206,6 +209,47 @@ class SqliteTranslationMemory:
                     translated.source,
                     now,
                 ),
+            )
+
+    def iter_translations(
+        self, *, source_lang: str, target_lang: str
+    ) -> Iterator[TranslatedSegment]:
+        # Scans every (segment, translation) pair for the requested
+        # language pair. Cycle-3 S5 auto-promotion is the first
+        # consumer; iteration order matches the underlying JOIN, which
+        # SQLite leaves unspecified — callers (e.g. promotion's
+        # n-gram aggregation) must not depend on it.
+        cursor = self._conn.execute(
+            "SELECT s.fingerprint, s.source_text, s.source_lang, "
+            "       s.placeholders_json, "
+            "       t.target_text, t.provider, t.model, t.confidence, "
+            "       t.source "
+            "FROM segments s "
+            "JOIN translations t ON s.fingerprint = t.fingerprint "
+            "WHERE s.source_lang = ? AND t.target_lang = ?",
+            (source_lang, target_lang),
+        )
+        # Iterate the cursor directly (NOT cursor.fetchall()) so the
+        # rows stream from sqlite without materializing the entire
+        # result set in memory. The Protocol contract says
+        # iter_translations is a streaming iterator; a 50k-segment TM
+        # with many provider rows could easily push the materialized
+        # list into the hundreds of MB.
+        for raw in cursor:
+            segment = Segment(
+                key=str(raw[0]),
+                source_text=str(raw[1]),
+                source_lang=str(raw[2]),
+                placeholders=_placeholders_from_json(str(raw[3])),
+            )
+            yield TranslatedSegment(
+                segment=segment,
+                target_lang=target_lang,
+                target_text=str(raw[4]),
+                provider=str(raw[5]),
+                model=str(raw[6]) if raw[6] is not None else "",
+                confidence=None if raw[7] is None else float(raw[7]),
+                source=_coerce_translation_source(raw[8]),
             )
 
     def stats(self) -> TmStats:
@@ -429,6 +473,37 @@ def _row_to_fuzzy(raw: tuple[Any, ...]) -> _FuzzyRow:
         model=str(raw[7]) if raw[7] is not None else "",
         confidence=None if raw[8] is None else float(raw[8]),
     )
+
+
+_VALID_TRANSLATION_SOURCES: Final = frozenset(
+    {
+        TRANSLATION_SOURCE_EXACT_TM,
+        TRANSLATION_SOURCE_FUZZY_TM,
+        TRANSLATION_SOURCE_PROVIDER,
+        TRANSLATION_SOURCE_MANUAL,
+    }
+)
+
+
+def _coerce_translation_source(value: Any) -> TranslationSource:
+    """Narrow a sqlite3-returned ``Any`` into the
+    :data:`TranslationSource` Literal type.
+
+    Cycle-3 S5 added :meth:`SqliteTranslationMemory.iter_translations`
+    which reads ``source`` back from the DB; sqlite3 stubs type the
+    column as ``Any`` so we validate-and-narrow at the boundary.
+    Unknown values raise — a corrupted row should not silently
+    default to a fabricated source tag.
+    """
+    text = str(value)
+    if text not in _VALID_TRANSLATION_SOURCES:
+        raise ValueError(
+            f"Unknown translation source {text!r} in TM row; expected one of "
+            f"{sorted(_VALID_TRANSLATION_SOURCES)}"
+        )
+    # Narrowed to TranslationSource via the membership check above;
+    # mypy needs the explicit cast to confirm.
+    return cast(TranslationSource, text)
 
 
 def _now_seconds() -> int:

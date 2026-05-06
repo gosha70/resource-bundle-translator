@@ -7,7 +7,7 @@
     {"id": 2, "name": "TBX 3.0 importer (parse Weblate exports)",                            "status": "done",   "moved_at": "2026-05-06"},
     {"id": 3, "name": "TBX 3.0 exporter + Weblate round-trip benchmark",                     "status": "done",   "moved_at": "2026-05-06"},
     {"id": 4, "name": "Persona system: YAML loader + 3 starter personas",                    "status": "done",   "moved_at": "2026-05-06"},
-    {"id": 5, "name": "Auto-promotion algorithm + nemo termbase CLI",                        "status": "uphill", "moved_at": "2026-05-05"},
+    {"id": 5, "name": "Auto-promotion algorithm + nemo termbase CLI",                        "status": "done",   "moved_at": "2026-05-06"},
     {"id": 6, "name": "Pipeline integration: termbase + persona prompt injection",           "status": "uphill", "moved_at": "2026-05-05"},
     {"id": 7, "name": "Documentation + cycle-3 outcomes hooks",                              "status": "uphill", "moved_at": "2026-05-05"}
   ]
