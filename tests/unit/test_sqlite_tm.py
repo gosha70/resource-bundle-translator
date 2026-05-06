@@ -517,3 +517,52 @@ def test_fuzzy_picks_best_match_among_many(tmp_path: Path) -> None:
     assert hit is not None
     assert hit.translated.target_text == "NEAR"
     tm.close()
+
+
+def test_iter_translations_streams_without_materializing(tmp_path: Path) -> None:
+    """Regression for the cycle-3 S5 P2 finding.
+
+    The TranslationMemory Protocol contract says iter_translations
+    is a streaming iterator so callers can scan large TMs without
+    holding the whole result set in memory. SqliteTranslationMemory
+    must iterate the cursor directly (NOT cursor.fetchall()), which
+    is what enables the streaming behavior.
+
+    The test asserts the contract by replacing the TM's connection
+    object with a wrapper whose execute() returns a cursor whose
+    fetchall() raises. If the implementation regresses to
+    cursor.fetchall(), this fails. Direct iteration over the cursor
+    (the correct path) does not touch fetchall().
+    """
+    from typing import Any
+    from typing import Iterator as _Iterator
+
+    tm = SqliteTranslationMemory(tmp_path / "tm.sqlite")
+    seg = Segment(key="k", source_text="hello world", source_lang=_LANG_EN_US)
+    tm.store(_ts(seg, target_text="hallo welt"))
+
+    real_conn = tm._conn
+
+    class _NoFetchAllCursor:
+        def __init__(self, real_cursor: Any) -> None:
+            self._cursor = real_cursor
+
+        def __iter__(self) -> _Iterator[tuple[Any, ...]]:
+            return iter(self._cursor)
+
+        def fetchall(self) -> list[tuple[Any, ...]]:
+            raise AssertionError(
+                "iter_translations must stream from the cursor, not call fetchall()"
+            )
+
+    class _WrappedConn:
+        def execute(self, *args: Any, **kwargs: Any) -> Any:
+            return _NoFetchAllCursor(real_conn.execute(*args, **kwargs))
+
+    tm._conn = _WrappedConn()  # type: ignore[assignment]
+    rows = list(tm.iter_translations(source_lang=_LANG_EN_US, target_lang=_LANG_DE))
+    assert len(rows) == 1
+    assert rows[0].target_text == "hallo welt"
+
+    tm._conn = real_conn
+    tm.close()

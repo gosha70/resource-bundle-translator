@@ -9,7 +9,7 @@ about a specific backend.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Final, Literal, Protocol, runtime_checkable
+from typing import Final, Iterator, Literal, Protocol, runtime_checkable
 
 from ainemo.core.segment import Segment, TranslatedSegment
 
@@ -104,6 +104,26 @@ class TranslationMemory(Protocol):
 
     def stats(self) -> TmStats:
         """Aggregate counts. Used by ``nemo tm stats``."""
+        ...
+
+    def iter_translations(
+        self, *, source_lang: str, target_lang: str
+    ) -> Iterator[TranslatedSegment]:
+        """Yield every cached translation for the
+        (``source_lang``, ``target_lang``) pair.
+
+        Cycle-3 S5's auto-promotion algorithm
+        (:func:`ainemo.core.termbase.promotion.find_candidates`) is
+        the first consumer — it scans TM rows for n-grams that meet
+        frequency + consistency thresholds. The cycle-5 reviewer UI
+        will consume the same surface for "show me everything we
+        have for this language pair" views.
+
+        Implementations MAY yield in any order; consumers must not
+        rely on iteration order. The return type is an iterator
+        rather than a tuple so backends can stream large
+        result sets without materializing them.
+        """
         ...
 
 

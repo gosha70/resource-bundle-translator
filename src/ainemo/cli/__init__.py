@@ -29,6 +29,7 @@ from ainemo.cli.commands import (
     register_validate,
 )
 from ainemo.cli.daemon import CMD_NAME_DAEMON, register_daemon
+from ainemo.cli.termbase_commands import CMD_NAME_TERMBASE, register_termbase
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -46,6 +47,7 @@ def _build_parser() -> argparse.ArgumentParser:
     register_validate(subparsers)
     register_provider(subparsers)
     register_daemon(subparsers)
+    register_termbase(subparsers)
     return parser
 
 
@@ -80,6 +82,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         from ainemo.cli.daemon import run_daemon
 
         return run_daemon(args)
+    if args.subcommand == CMD_NAME_TERMBASE:
+        from ainemo.cli.termbase_commands import run_termbase
+
+        return run_termbase(args)
     parser.print_help(sys.stderr)
     return 2
 
