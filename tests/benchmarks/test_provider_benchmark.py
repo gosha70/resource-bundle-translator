@@ -73,7 +73,9 @@ class _NoopBenchProvider:
 
     provider_id: ClassVar[str] = PROVIDER_ID_NOOP
 
-    def translate(self, segment: Segment, target_lang: str) -> ProviderResult:
+    def translate(
+        self, segment: Segment, target_lang: str, *, system_prompt_addendum: str | None = None
+    ) -> ProviderResult:
         return ProviderResult(
             target_text=segment.source_text,
             provider=PROVIDER_ID_NOOP,

@@ -63,7 +63,17 @@ class OpusProvider:
         # provider builds its own cache.
         self._cache = cache or MarianModelCache(cache_dir=cache_dir)
 
-    def translate(self, segment: Segment, target_lang: str) -> ProviderResult:
+    def translate(
+        self,
+        segment: Segment,
+        target_lang: str,
+        *,
+        system_prompt_addendum: str | None = None,
+    ) -> ProviderResult:
+        # OPUS / Helsinki-NLP Marian is a seq2seq model with no
+        # system-prompt surface, so the cycle-3 S6
+        # `system_prompt_addendum` is accepted-and-ignored here.
+        del system_prompt_addendum
         if not is_supported_source(segment.source_lang):
             raise ValueError(
                 f"OpusProvider supports English source only in cycle 2; "

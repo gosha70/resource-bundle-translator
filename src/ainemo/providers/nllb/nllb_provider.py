@@ -47,7 +47,18 @@ class NllbProvider:
         # the provider builds a real holder on first translate.
         self._holder = model_holder or NllbModelHolder(model_id=model, cache_dir=cache_dir)
 
-    def translate(self, segment: Segment, target_lang: str) -> ProviderResult:
+    def translate(
+        self,
+        segment: Segment,
+        target_lang: str,
+        *,
+        system_prompt_addendum: str | None = None,
+    ) -> ProviderResult:
+        # NLLB-200 is a seq2seq model with no system-prompt surface,
+        # so the cycle-3 S6 `system_prompt_addendum` is accepted-and-
+        # ignored here. The pipeline still injects the addendum for
+        # LLM providers in the same call site.
+        del system_prompt_addendum
         from_code = to_nllb_code(segment.source_lang)
         to_code = to_nllb_code(target_lang)
         if from_code is None or to_code is None:

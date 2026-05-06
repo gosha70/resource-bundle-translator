@@ -396,7 +396,17 @@ class _NoOpProvider:
 
     provider_id: ClassVar[str] = PROVIDER_ID_NOOP
 
-    def translate(self, segment: Segment, target_lang: str) -> ProviderResult:
+    def translate(
+        self,
+        segment: Segment,
+        target_lang: str,
+        *,
+        system_prompt_addendum: str | None = None,
+    ) -> ProviderResult:
+        # No-op echoes the source. Cycle-3 S6 system_prompt_addendum
+        # has no effect on a passthrough; accepted to satisfy the
+        # Provider Protocol.
+        del system_prompt_addendum
         return ProviderResult(
             target_text=segment.source_text,
             provider=PROVIDER_ID_NOOP,

@@ -136,6 +136,7 @@ class ProviderRouter:
         segment: Segment,
         target_lang: str,
         *,
+        system_prompt_addendum: str | None = None,
         persona: str | None = None,
         domain: str | None = None,
     ) -> ProviderResult:
@@ -143,7 +144,16 @@ class ProviderRouter:
         record to UsageLog, return the ProviderResult.
 
         Wrapped with :func:`with_retry` on the configured rate-limit
-        exception types. Non-retryable exceptions surface immediately."""
+        exception types. Non-retryable exceptions surface immediately.
+
+        Cycle-3 S6: ``system_prompt_addendum`` (the persona prompt
+        addendum + termbase glossary block built by the pipeline)
+        is forwarded to the selected provider. ``persona`` /
+        ``domain`` (cycle-2) drive routing-rule matching and are
+        independent of this addendum — a routing rule selects WHICH
+        provider; the addendum is what THAT provider sees as a
+        system-prompt extension. Both can be set at once.
+        """
         provider = self._select_provider(
             source_lang=segment.source_lang,
             target_lang=target_lang,
@@ -161,7 +171,19 @@ class ProviderRouter:
 
         def _do_call() -> ProviderResult:
             started = time.perf_counter()
-            result = provider.translate(segment, target_lang)
+            # Conditional kwarg pass mirrors the cycle-3 S6 pipeline
+            # call site — when no addendum was supplied, call the
+            # underlying provider with the cycle-2 (segment, target_lang)
+            # signature so test stubs and pre-Protocol-bump impls
+            # stay byte-stable.
+            if system_prompt_addendum is None:
+                result = provider.translate(segment, target_lang)
+            else:
+                result = provider.translate(
+                    segment,
+                    target_lang,
+                    system_prompt_addendum=system_prompt_addendum,
+                )
             elapsed_ms = int((time.perf_counter() - started) * 1000)
             # PR #7 review #10: split the post-call patch into two
             # explicit defense-in-depth steps so a future bisect or

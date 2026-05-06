@@ -28,6 +28,11 @@ from ainemo.core.segment import (
     Segment,
     TranslatedSegment,
 )
+from ainemo.core.termbase.base import (
+    ConceptHit,
+    Persona,
+    Termbase,
+)
 from ainemo.core.tm.base import (
     DEFAULT_FUZZY_THRESHOLD,
     TM_MATCH_TYPE_EXACT,
@@ -38,7 +43,8 @@ from ainemo.core.validators.base import (
     Validator,
     Violation,
 )
-from ainemo.providers.base import Provider
+from ainemo.providers.base import Provider, ProviderResult
+from ainemo.providers.router import ProviderRouter
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +102,8 @@ class TranslationPipeline:
         strict: bool = False,
         expected_provider: str | None = None,
         expected_model: str | None = None,
+        termbase: Termbase | None = None,
+        persona: Persona | None = None,
     ) -> None:
         self._adapter = adapter
         self._tm = tm
@@ -115,6 +123,13 @@ class TranslationPipeline:
         # callers that haven't opted into a specific provider.
         self._expected_provider = expected_provider
         self._expected_model = expected_model
+        # Cycle-3 S6: optional termbase + persona inject a
+        # system-prompt addendum into the provider call on TM-miss
+        # segments. When both are None, the pipeline behaves
+        # identically to cycles 1+2 — the cycle-1 e2e test must still
+        # pass unchanged.
+        self._termbase = termbase
+        self._persona = persona
 
     def translate_file(self, source_path: Path, output_dir: Path) -> PipelineResult:
         segments = self._adapter.parse(source_path, self._source_lang)
@@ -192,7 +207,15 @@ class TranslationPipeline:
             # actually translated names itself via ``result.provider``.
             # The router (scope 4) records the full ProviderResult to
             # UsageLog.
-            result = self._provider.translate(segment, target_lang)
+            #
+            # Cycle-3 S6: build a system-prompt addendum from the
+            # configured persona and the termbase's concept hits for
+            # this segment. When no addendum is needed — cycle-1+2
+            # paths — we call without the kwarg so existing Provider
+            # impls and test doubles whose `translate()` predates the
+            # Protocol bump stay byte-stable.
+            addendum = self._build_system_prompt_addendum(segment, target_lang)
+            result = self._call_provider(segment, target_lang, addendum)
             translated = TranslatedSegment(
                 segment=segment,
                 target_lang=target_lang,
@@ -241,11 +264,112 @@ class TranslationPipeline:
             tm_hit,
         )
 
+    def _call_provider(
+        self,
+        segment: Segment,
+        target_lang: str,
+        system_prompt_addendum: str | None,
+    ) -> ProviderResult:
+        """Forward to the configured provider with the right kwargs.
+
+        Cycle-3 S6 P2 fix: when the provider is a
+        :class:`ProviderRouter`, thread ``persona`` + ``domain`` so the
+        router's :class:`RoutingRule` matchers can fire — without
+        this, a rule like
+        ``RoutingRule(provider_id='openai', persona='legal', domain='legal')``
+        never matches even when the pipeline was constructed with the
+        matching :class:`Persona`. For non-router providers, the
+        routing kwargs would TypeError, so we omit them. The
+        ``system_prompt_addendum`` kwarg is also conditional so test
+        doubles whose ``translate()`` predates the cycle-3 Protocol
+        bump stay byte-stable.
+        """
+        is_router = isinstance(self._provider, ProviderRouter)
+        kwargs: dict[str, str | None] = {}
+        if system_prompt_addendum is not None:
+            kwargs["system_prompt_addendum"] = system_prompt_addendum
+        if is_router and self._persona is not None:
+            kwargs["persona"] = self._persona.persona_id
+            kwargs["domain"] = self._persona.domain_id
+        if not kwargs:
+            return self._provider.translate(segment, target_lang)
+        return self._provider.translate(segment, target_lang, **kwargs)
+
+    def _build_system_prompt_addendum(self, segment: Segment, target_lang: str) -> str | None:
+        """Compose the persona prompt + termbase glossary block.
+
+        Returns ``None`` when neither a termbase nor a persona is
+        configured (cycle-1+2 path stays byte-stable). Otherwise
+        concatenates:
+
+        - The persona's ``prompt_addendum`` (free text), if any.
+        - A glossary block of termbase concept hits for this segment,
+          formatted as ``- "source" → "target"`` lines, if any.
+
+        Both halves are optional — a configured persona with no
+        termbase still contributes the prompt addendum; a configured
+        termbase with no persona contributes only the glossary block.
+        """
+        if self._termbase is None and self._persona is None:
+            return None
+        sections: list[str] = []
+        if self._persona is not None and self._persona.prompt_addendum.strip():
+            sections.append(self._persona.prompt_addendum.strip())
+        if self._termbase is not None:
+            domain_id = self._persona.domain_id if self._persona is not None else None
+            hits = self._termbase.lookup_concepts_for(
+                segment.source_text,
+                segment.source_lang,
+                target_lang,
+                domain_id=domain_id,
+            )
+            block = _format_glossary_block(hits, target_lang)
+            if block:
+                sections.append(block)
+        if not sections:
+            return None
+        return "\n\n".join(sections)
+
     def _is_blocking(self, violation: Violation) -> bool:
         if violation.severity == VIOLATION_SEVERITY_ERROR:
             return True
         # In strict mode, warnings escalate to blocking.
         return self._strict
+
+
+_GLOSSARY_HEADER = "Glossary (apply to the segment if relevant):"
+
+
+def _format_glossary_block(hits: tuple[ConceptHit, ...], target_lang: str) -> str | None:
+    """Format ``ConceptHit`` rows into a system-prompt glossary block.
+
+    Returns ``None`` when there are no hits or no hit has a target-lang
+    term — an empty block is worse than no block (it tells the model a
+    glossary applies and then provides nothing). Hits with no
+    target-lang term are skipped silently; the cycle-5 reviewer UI
+    surfaces them through a different channel
+    (:class:`ConceptHit.target_terms` is empty for those).
+
+    Format:
+
+        Glossary (apply to the segment if relevant):
+        - "login" → "Anmeldung"
+        - "logout" → "Abmeldung"
+
+    Each entry uses the matched source term and the *first* available
+    target-lang term — the termbase Protocol contract sorts terms by
+    ``(lang, surface, term_id)`` so the choice is deterministic.
+    """
+    lines: list[str] = []
+    for hit in hits:
+        if not hit.target_terms:
+            continue
+        target_surface = hit.target_terms[0].surface
+        source_surface = hit.matched_source_term.surface
+        lines.append(f'- "{source_surface}" → "{target_surface}"')
+    if not lines:
+        return None
+    return "\n".join([_GLOSSARY_HEADER, *lines])
 
 
 _LOCALE_SUFFIX_PATTERN = re.compile(r"_(?:[a-z]{2,3})(?:_[A-Za-z][A-Za-z0-9]{1,3})?$")

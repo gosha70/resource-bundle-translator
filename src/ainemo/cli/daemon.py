@@ -32,9 +32,15 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Callable, Final, Mapping, TextIO
+from typing import TYPE_CHECKING, Any, Callable, Final, Mapping, TextIO
 
 from ainemo.core.segment import Segment
+
+if TYPE_CHECKING:
+    # Kuzu is a heavyweight dep (cycle-3); keep it out of import-time
+    # for daemons that never get a persona-aware request.
+    from ainemo.core.termbase.base import Persona
+    from ainemo.core.termbase.kuzu.store import KuzuTermbase
 from ainemo.providers._usage_log import DEFAULT_USAGE_LOG_PATH, UsageLog
 from ainemo.providers.base import Provider, ProviderResult
 from ainemo.providers.router import (
@@ -91,6 +97,15 @@ PARAM_TARGET_LANGS: Final = "target_langs"
 PARAM_OUTPUT_DIR: Final = "output_dir"
 PARAM_FORMAT: Final = "format"
 PARAM_TM_PATH: Final = "tm_path"
+
+# Cycle-3 S6: optional persona-aware request fields. Both are
+# additive on the v=1 envelope — clients that don't set them get
+# cycle-1+2 behavior. ``persona_id`` is loaded from the termbase
+# at ``termbase_path`` (defaults to .ainemo/termbase.kuzu) on each
+# request; the cycle-3 S5 ``nemo termbase init`` command primes
+# that location with the starter personas.
+PARAM_PERSONA_ID: Final = "persona_id"
+PARAM_TERMBASE_PATH: Final = "termbase_path"
 
 # translate_file-op result keys.
 RESULT_TARGET_LANG_PATHS: Final = "target_lang_paths"
@@ -167,6 +182,11 @@ class DaemonServer:
         # one concrete backend + a UsageLog handle). Built lazily so a
         # daemon only ever connects to providers the caller asks for.
         self._routers: dict[str, ProviderRouter] = {}
+        # Cycle-3 S6: cache: termbase_path string → KuzuTermbase
+        # handle. Lazily opened the first time a persona-aware request
+        # arrives; reused across requests so Kuzu's per-open cost
+        # amortizes over the daemon lifetime.
+        self._termbases: dict[str, "KuzuTermbase"] = {}
 
     def serve(self, *, stdin: TextIO, stdout: TextIO) -> None:
         """Read newline-delimited JSON requests from ``stdin`` and
@@ -301,7 +321,14 @@ class DaemonServer:
 
         router = self._get_or_build_router(provider_id)
         segment = Segment(key=key, source_text=source_text, source_lang=source_lang)
-        result = router.translate(segment, target_lang)
+        # Cycle-3 S6: optional persona-aware addendum. When the
+        # request omits persona_id, this returns None and the call
+        # is byte-identical to cycle-2 behavior.
+        addendum = self._build_persona_addendum(params, segment, target_lang)
+        if addendum is None:
+            result = router.translate(segment, target_lang)
+        else:
+            result = router.translate(segment, target_lang, system_prompt_addendum=addendum)
         return _provider_result_to_dict(result)
 
     def _op_translate_file(self, params: Mapping[str, Any]) -> dict[str, Any]:
@@ -364,6 +391,10 @@ class DaemonServer:
         )
         output_dir = Path(output_dir_raw)
 
+        # Cycle-3 S6: optional persona + termbase resolution.
+        # `(None, None)` when persona_id is absent — pipeline path
+        # stays cycle-1+2 byte-stable.
+        persona, termbase = self._resolve_persona(params)
         router = self._get_or_build_router(provider_id)
         validators = _build_validators(forbidden_terms=[])
         tm = SqliteTranslationMemory(tm_path)
@@ -380,6 +411,8 @@ class DaemonServer:
                 # requested provider so a prior run with a different
                 # backend does not satisfy this one.
                 expected_provider=provider_id,
+                termbase=termbase,
+                persona=persona,
             )
             result = pipeline.translate_file(source_path, output_dir)
         finally:
@@ -411,6 +444,89 @@ class DaemonServer:
         )
         self._routers[provider_id] = router
         return router
+
+    # --- Cycle-3 S6 persona-aware request helpers ---
+
+    def _resolve_persona(
+        self, params: Mapping[str, Any]
+    ) -> tuple["Persona | None", "KuzuTermbase | None"]:
+        """Return ``(persona, termbase)`` for a request, or
+        ``(None, None)`` when persona_id is absent.
+
+        The termbase is opened lazily and cached on the daemon
+        instance — repeated requests for the same termbase_path
+        reuse one Kuzu connection. Raises
+        :class:`_DaemonRequestError` when the requested persona
+        cannot be found in the termbase, so the caller learns the
+        misconfiguration rather than silently getting cycle-2
+        behavior.
+        """
+        persona_id = params.get(PARAM_PERSONA_ID)
+        if not isinstance(persona_id, str) or not persona_id:
+            return None, None
+        termbase = self._get_or_build_termbase(params)
+        persona = termbase.get_persona(persona_id)
+        if persona is None:
+            raise _DaemonRequestError(
+                code=ERR_INVALID_PARAMS,
+                message=(
+                    f"persona_id={persona_id!r} not found in termbase. "
+                    "Run `nemo termbase init` to populate the starter "
+                    "personas, or sync the persona YAMLs into the "
+                    "termbase first."
+                ),
+            )
+        return persona, termbase
+
+    def _get_or_build_termbase(self, params: Mapping[str, Any]) -> "KuzuTermbase":
+        from ainemo.core.termbase._ids import DEFAULT_TERMBASE_PATH
+
+        path_raw = params.get(PARAM_TERMBASE_PATH)
+        path_str = path_raw if isinstance(path_raw, str) and path_raw else DEFAULT_TERMBASE_PATH
+        cached = self._termbases.get(path_str)
+        if cached is not None:
+            return cached
+        from ainemo.core.termbase.kuzu.store import KuzuTermbase
+
+        termbase = KuzuTermbase(Path(path_str))
+        self._termbases[path_str] = termbase
+        return termbase
+
+    def _build_persona_addendum(
+        self,
+        params: Mapping[str, Any],
+        segment: Segment,
+        target_lang: str,
+    ) -> str | None:
+        """Build the system-prompt addendum for a single-segment
+        ``translate`` op. Mirrors
+        :meth:`TranslationPipeline._build_system_prompt_addendum`
+        in shape — same persona prompt + termbase glossary
+        composition — but operates on a single Segment without
+        going through the pipeline's TM-miss gate.
+        """
+        persona, termbase = self._resolve_persona(params)
+        if persona is None:
+            return None
+        # Local import keeps the cycle-3 deps out of import-time.
+        from ainemo.core.pipeline import _format_glossary_block
+
+        sections: list[str] = []
+        if persona.prompt_addendum.strip():
+            sections.append(persona.prompt_addendum.strip())
+        if termbase is not None:
+            hits = termbase.lookup_concepts_for(
+                segment.source_text,
+                segment.source_lang,
+                target_lang,
+                domain_id=persona.domain_id,
+            )
+            block = _format_glossary_block(hits, target_lang)
+            if block:
+                sections.append(block)
+        if not sections:
+            return None
+        return "\n\n".join(sections)
 
 
 # --- Helpers --------------------------------------------------------------
