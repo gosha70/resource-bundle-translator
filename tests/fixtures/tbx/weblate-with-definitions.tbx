@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Weblate-style TBX 3.0 export — every concept has at least one
+  <definition> in its source-language termSec. Round-trip target:
+  importer must produce empty skipped_unsupported and Concept.definition
+  must be populated for every concept.
+-->
+<tbx style="dca" type="TBX-Basic" xml:lang="en"
+     xmlns="urn:iso:std:iso:30042:ed-2">
+  <tbxHeader>
+    <fileDesc>
+      <titleStmt><title>defined-glossary</title></titleStmt>
+      <sourceDesc><p>Weblate glossary export</p></sourceDesc>
+    </fileDesc>
+  </tbxHeader>
+  <text>
+    <body>
+      <conceptEntry id="c-database">
+        <descrip type="domain">software</descrip>
+        <langSec xml:lang="en">
+          <termSec>
+            <term>database</term>
+            <definition>An organized collection of structured data.</definition>
+          </termSec>
+        </langSec>
+        <langSec xml:lang="de">
+          <termSec>
+            <term>Datenbank</term>
+          </termSec>
+        </langSec>
+      </conceptEntry>
+      <conceptEntry id="c-cache">
+        <descrip type="domain">software</descrip>
+        <langSec xml:lang="en">
+          <termSec>
+            <term>cache</term>
+            <definition>A high-speed data storage layer storing a subset of data, typically transient.</definition>
+          </termSec>
+        </langSec>
+        <langSec xml:lang="de">
+          <termSec>
+            <term>Zwischenspeicher</term>
+          </termSec>
+        </langSec>
+      </conceptEntry>
+    </body>
+  </text>
+</tbx>

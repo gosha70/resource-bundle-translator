@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Pathological case: every concept has at least one term but no
+  <definition> anywhere. Importer must accept this (definitions are
+  optional in TBX 3.0) and Concept.definition stays None.
+  skipped_unsupported should remain empty.
+-->
+<tbx style="dca" type="TBX-Basic" xml:lang="en"
+     xmlns="urn:iso:std:iso:30042:ed-2">
+  <tbxHeader>
+    <fileDesc>
+      <titleStmt><title>no-definitions</title></titleStmt>
+      <sourceDesc><p>Hand-crafted edge case</p></sourceDesc>
+    </fileDesc>
+  </tbxHeader>
+  <text>
+    <body>
+      <conceptEntry id="c-search">
+        <langSec xml:lang="en">
+          <termSec>
+            <term>search</term>
+          </termSec>
+        </langSec>
+        <langSec xml:lang="de">
+          <termSec>
+            <term>suchen</term>
+          </termSec>
+        </langSec>
+      </conceptEntry>
+      <conceptEntry id="c-filter">
+        <langSec xml:lang="en">
+          <termSec>
+            <term>filter</term>
+          </termSec>
+        </langSec>
+        <langSec xml:lang="de">
+          <termSec>
+            <term>filtern</term>
+          </termSec>
+        </langSec>
+      </conceptEntry>
+    </body>
+  </text>
+</tbx>
