@@ -1,0 +1,23 @@
+# Cycle-3 starter persona — software UI translation. Loaded by
+# core/termbase/persona_loader.py at first start; idempotent on
+# re-sync because Termbase.add_persona upserts on persona_id.
+#
+# Schema (per pitch § Open questions Q2, resolved at /bet 2026-05-05):
+#   mandatory: persona_id, name, forbidden_terms, prompt_addendum
+#   optional:  domain_id, register, style_guide_url, glossary_overrides
+#   dropped:   provider_hints (lives on RoutingConfig instead)
+persona_id: software-ui
+name: "Software UI"
+domain_id: software
+register: neutral
+forbidden_terms: []
+style_guide_url: null
+glossary_overrides: []
+prompt_addendum: |
+  Translate UI strings for software interfaces. Preserve every
+  placeholder (`{name}`, `{0}`, ICU `{count, plural, ...}`)
+  exactly as written in the source — do not translate, reorder,
+  or alter placeholder tokens. Keep translations short enough to
+  fit typical UI elements (buttons, menu items, labels). Use the
+  target locale's idiomatic software-ecosystem terminology rather
+  than literal renderings of English originals.

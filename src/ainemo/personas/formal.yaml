@@ -1,0 +1,19 @@
+# Cycle-3 starter persona — formal register. Domain-agnostic
+# baseline for legal, medical, regulatory, and corporate
+# communications. Cycle-4 domain packs (legal-en, medical-en, ...)
+# extend this persona's terminology via the termbase rather than
+# editing the prompt addendum.
+persona_id: formal
+name: "Formal register"
+domain_id: null
+register: formal
+forbidden_terms: []
+style_guide_url: null
+glossary_overrides: []
+prompt_addendum: |
+  Translate using a formal, professional register appropriate for
+  legal, regulatory, medical, or corporate communications. Use
+  full sentences and complete grammatical forms. Avoid
+  contractions, colloquialisms, and informal address forms; prefer
+  the polite second-person ("Sie" in German, "vous" in French,
+  etc.) when addressing the reader. Preserve placeholders exactly.
