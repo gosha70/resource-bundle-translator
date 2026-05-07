@@ -17,7 +17,7 @@ backends import their drivers privately.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterator, Protocol, runtime_checkable
+from typing import ClassVar, Iterator, Protocol, runtime_checkable
 
 
 @dataclass(frozen=True)
@@ -92,13 +92,19 @@ class ImportReport:
     """
 
     concepts_added: int
-    """Distinct concepts written. Re-running an idempotent import
-    against unchanged source data sets this to 0 because the upserts
-    refresh existing rows rather than creating new ones."""
+    """Concepts processed by this import — counts every row that
+    successfully turned into an :class:`ImportRecord`, regardless
+    of whether the underlying upsert created a new row or refreshed
+    an existing one. Same shape as cycle-3's
+    :class:`TbxImportReport.concepts_added`. To distinguish new vs
+    refreshed, compare :meth:`Termbase.stats` before and after the
+    import."""
 
     terms_added: int
-    """Distinct (concept, lang, surface) triples written. Same
-    upsert-on-re-import semantics as ``concepts_added``."""
+    """Term rows processed by this import — counts every (concept,
+    lang, surface) triple emitted, regardless of whether the
+    underlying upsert created a new term or refreshed an existing
+    one. Same convention as ``concepts_added``."""
 
     domains_added: int
     """Distinct new ``Domain`` rows created during the import.
@@ -127,6 +133,16 @@ class TermbaseSource(Protocol):
     real demand surfaces (per the pitch's no-go list, cycle 4
     explicitly defers RDF/SKOS / Wikidata SPARQL).
     """
+
+    provenance: ClassVar[str]
+    """Stable provenance tag from
+    :mod:`ainemo.core.termbase.sources._ids` (e.g.
+    ``TERM_SOURCE_CSV_IMPORT``). The loader bridge stamps it on
+    every :attr:`Term.source` it writes so the cycle-5 reviewer UI
+    can audit imported-from-CSV terms separately from imported-
+    from-JSONL / imported-from-TBX (cycle 3) / auto-promoted-from-TM
+    (cycle 3 S5) terms. Mirrors the cycle-2 ``Provider.provider_id``
+    ClassVar pattern."""
 
     def iter_concepts(self) -> Iterator[ImportRecord | SkippedRow]:
         """Yield one item per source-file row — either an
