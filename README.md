@@ -2,7 +2,7 @@
 
 **Networked Engine for Multilingual Ontologies** — knowledge-graph-grounded terminology and localization for software, with versioned domain packs and CC0/CC-BY ontology integrations. Distributed under the **egoge.com** namespace alongside [AI-ATLAS](https://github.com/gosha70/ai-atlas).
 
-> **Status**: pre-release. Cycles 0–2 **shipped**. Cycle 0 (rebrand & stabilize) shipped 2026-05-03 — see the [retrospective](specs/retros/cycle-0.md). Cycle 1 (foundation: adapters + translation memory + validators) shipped 2026-05-03 — four bundle adapters, SQLite TM with embedding-based fuzzy lookup, four validators, end-to-end pipeline, and the `nemo` CLI. Cycle 2 (provider abstraction + Gradle plugin) shipped 2026-05-05 — `Provider` Protocol with NLLB / OPUS / OpenAI / **Anthropic Claude** / **Ollama** backends behind a cost/latency-tracked `ProviderRouter`, `~/.ainemo/usage.jsonl` UsageLog, `nemo daemon` JSON-over-stdio IPC, and the `com.egoge.ai.nemo.translate` Gradle plugin — see the [retrospective](specs/retros/cycle-2.md) and the [post-cycle cooldown report](specs/retros/cooldown-after-02.md). Cycle 3 (concept-oriented termbase via Kuzu) is the next ROADMAP bet. See [`specs/ROADMAP.md`](specs/ROADMAP.md) for the full plan and [`specs/pitches/`](specs/pitches/) for individual cycles.
+> **Status**: pre-release. Cycles 0–3 **shipped**, cycle 4 **closing**. Cycle 0 (rebrand & stabilize) shipped 2026-05-03 — see the [retrospective](specs/retros/cycle-0.md). Cycle 1 (foundation: adapters + translation memory + validators) shipped 2026-05-03 — four bundle adapters, SQLite TM with embedding-based fuzzy lookup, four validators, end-to-end pipeline, and the `nemo` CLI. Cycle 2 (provider abstraction + Gradle plugin) shipped 2026-05-05 — `Provider` Protocol with NLLB / OPUS / OpenAI / **Anthropic Claude** / **Ollama** backends behind a cost/latency-tracked `ProviderRouter`, `~/.ainemo/usage.jsonl` UsageLog, `nemo daemon` JSON-over-stdio IPC, and the `com.egoge.ai.nemo.translate` Gradle plugin — see the [retrospective](specs/retros/cycle-2.md) and the [post-cycle cooldown report](specs/retros/cooldown-after-02.md). Cycle 3 (concept-oriented termbase via Kuzu) shipped 2026-05-06 — `Termbase` Protocol with `KuzuTermbase` backend, TBX 3.0 import/export with byte-stable output, persona system with three starter packs, TM auto-promotion algorithm, and the `nemo termbase` CLI family; see the [retrospective](specs/retros/cycle-3.md) and the [post-cycle cooldown report](specs/retros/cooldown-after-03.md). Cycle 4 (pluggable termbase importer pipeline) is closing on 2026-05-07 — `TermbaseSource` Protocol with `CsvSource` and `JsonLinesSource` backends, YAML-driven `FieldMapping`, and `nemo termbase import-from-csv` / `import-from-jsonl` CLIs (see [`docs/importers.md`](docs/importers.md)); cooldown retro pending. See [`specs/ROADMAP.md`](specs/ROADMAP.md) for the full plan and [`specs/pitches/`](specs/pitches/) for individual cycles.
 
 ## What this is
 
@@ -74,6 +74,11 @@ nemo termbase import path/to/glossary.tbx
 nemo termbase export path/to/out.tbx [--domain-id software]
 nemo termbase promote --source-lang en --target-lang de [--review|--accept-all]
 nemo termbase stats
+
+# Cycle-4 — import your team's CSV / JSONL glossary (see "Import your
+# team's glossary" below + docs/importers.md for the YAML schema).
+nemo termbase import-from-csv path/to/glossary.csv --map-config mapping.yaml
+nemo termbase import-from-jsonl path/to/dump.jsonl --map-config mapping.yaml
 ```
 
 `nemo translate` infers the bundle format from the source path's extension; pass `--format` to override. See [`docs/adapters.md`](docs/adapters.md) for the format → adapter table and [`docs/providers.md`](docs/providers.md) for per-provider prereqs, default models, env vars (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OLLAMA_HOST`), and cost tracking.
@@ -168,6 +173,39 @@ When neither a termbase nor a persona is configured, the pipeline behaves identi
 
 See [`docs/termbase.md`](docs/termbase.md) for the concept model, schema, TBX subset table, and `nemo termbase` CLI reference, and [`docs/personas.md`](docs/personas.md) for the YAML schema, starter personas, authoring guide, and prompt-injection mechanics.
 
+## Import your team's glossary
+
+Cycle 4 ships the **pluggable termbase importer pipeline** for the 90%+ of i18n teams whose glossary lives in a spreadsheet rather than TBX. Two formats supported out of the box:
+
+```bash
+# A spreadsheet exported as CSV.
+nemo termbase import-from-csv path/to/glossary.csv \
+    --map-config mapping.yaml \
+    [--encoding latin-1] [--delimiter ';'] [--namespace marketing]
+
+# A one-record-per-line JSON dump (e.g. `npm run extract-terms`).
+nemo termbase import-from-jsonl path/to/dump.jsonl \
+    --map-config mapping.yaml \
+    [--namespace marketing]
+```
+
+Both flow through a YAML field-mapping file the team commits alongside the data:
+
+```yaml
+# mapping.yaml
+source_lang: en-US
+source_column: term_en
+target_columns:
+  de-DE: term_de
+  fr-FR: term_fr
+domain_column: category      # optional
+definition_column: notes     # optional
+```
+
+Re-running an import with unchanged source data + unchanged `--namespace` is byte-stable at the termbase level — concept ids are content-addressed `import-<sha256[:16]>` over `(source_lang, source_term, namespace)`, so the second run upserts onto the same rows. Two glossaries sharing a source surface (`cancel` in marketing.csv vs legal.csv) stay distinct via `--namespace` or a per-row `domain_column`.
+
+See [`docs/importers.md`](docs/importers.md) for the full `FieldMapping` schema, the `TermbaseSource` Protocol, error surfaces, and the idempotency / namespace-collision contracts.
+
 ## Development
 
 ```bash
@@ -223,7 +261,8 @@ Development cadence is documented in [`specs/README.md`](specs/README.md). Each 
 | 0 | [Rebrand & Stabilize](specs/pitches/0000-rebrand-stabilize/pitch.md) | shipped — see [retro](specs/retros/cycle-0.md) |
 | 1 | [Foundation: Adapters + TM + Validators](specs/pitches/0001-foundation/pitch.md) | shipped — adapters + TM + validators + pipeline + CLI all in `src/ainemo/core/` |
 | 2 | [Provider Abstraction + Gradle Plugin](specs/pitches/0002-providers-gradle/pitch.md) | shipped — see [retro](specs/retros/cycle-2.md) and [cooldown report](specs/retros/cooldown-after-02.md) |
-| 3 | Concept-Oriented Termbase via Kuzu | next ROADMAP bet — pitch shaping during cooldown |
+| 3 | [Concept-Oriented Termbase via Kuzu](specs/pitches/0003-kuzu-termbase/pitch.md) | shipped — see [retro](specs/retros/cycle-3.md) and [cooldown report](specs/retros/cooldown-after-03.md) |
+| 4 | [Pluggable Termbase Importer Pipeline](specs/pitches/0004-termbase-importer-pipeline/pitch.md) | closing — all six scopes done; cooldown retro pending |
 
 Future cycles (Kuzu termbase, domain packs, reviewer UI, multi-platform expansion) are sketched in [`specs/ROADMAP.md`](specs/ROADMAP.md) but re-shaped before each betting table.
 

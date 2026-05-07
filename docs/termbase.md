@@ -77,7 +77,7 @@ All writes are upserts on the entity's PK, so re-adding the same `Concept` / `Te
 
 ## `nemo termbase` CLI
 
-Cycle-3 S5 ships five sub-subcommands. All accept `--termbase-path` (default `.ainemo/termbase.kuzu`).
+Cycle-3 S5 ships five sub-subcommands; cycle-4 S4/S5 add two more for non-TBX glossary imports (see [`docs/importers.md`](importers.md)). All accept `--termbase-path` (default `.ainemo/termbase.kuzu`).
 
 | Command | What it does |
 |---|---|
@@ -86,6 +86,8 @@ Cycle-3 S5 ships five sub-subcommands. All accept `--termbase-path` (default `.a
 | `nemo termbase export <file.tbx> [--domain-id DOM]` | Export to TBX 3.0. Output is byte-stable — re-export of an unchanged termbase produces identical bytes. |
 | `nemo termbase promote --source-lang en --target-lang de` | Scan the TM for promotable n-grams and write accepted candidates as `Concept` + `Term` rows tagged `tm-promotion`. `--review` (default) walks each candidate y/n/q; `--accept-all` skips the prompt. |
 | `nemo termbase stats` | Print concept / domain / persona counts + per-language term counts. |
+| `nemo termbase import-from-csv <file.csv> --map-config m.yaml` | Import a CSV via a YAML field-mapping (cycle-4 S4). `--encoding`, `--delimiter`, `--namespace` overrides. See [`docs/importers.md`](importers.md). |
+| `nemo termbase import-from-jsonl <file.jsonl> --map-config m.yaml` | Same shape for JSON-Lines (cycle-4 S5). No `--delimiter` (JSONL has no field separator). |
 
 Auto-promotion thresholds (resolved at /bet, 2026-05-05; tunable per run):
 
@@ -153,6 +155,8 @@ N-grams are whitespace-tokenized, length 1..4 by default (override via `n_range`
 
 ## See also
 
+- [`docs/importers.md`](importers.md) — cycle-4 CSV / JSONL importer pipeline (`TermbaseSource` Protocol, `FieldMapping` YAML schema, `import-from-csv` / `import-from-jsonl` CLI, idempotency contract).
 - [`docs/personas.md`](personas.md) — persona YAML schema, starter pack, authoring guide.
 - [`tests/benchmarks/cycle-3-tbx-roundtrip.md`](../tests/benchmarks/cycle-3-tbx-roundtrip.md) — manual benchmark procedure for parity against real Weblate exports.
 - [`specs/pitches/0003-kuzu-termbase/pitch.md`](../specs/pitches/0003-kuzu-termbase/pitch.md) — the cycle-3 Shape-Up pitch.
+- [`specs/pitches/0004-termbase-importer-pipeline/pitch.md`](../specs/pitches/0004-termbase-importer-pipeline/pitch.md) — the cycle-4 Shape-Up pitch.
