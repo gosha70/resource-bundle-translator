@@ -40,6 +40,19 @@ from ainemo.core.termbase.base import Concept, Term, Termbase
 from ainemo.core.termbase.kuzu.store import KuzuTermbase
 from ainemo.core.termbase.persona_loader import sync_personas_into_termbase
 from ainemo.core.termbase.promotion import PromotionCandidate, find_candidates
+from ainemo.core.termbase.sources._ids import (
+    DEFAULT_CSV_DELIMITER,
+    DEFAULT_CSV_ENCODING,
+)
+from ainemo.core.termbase.sources.csv_source import (
+    CsvDecodeError,
+    CsvSource,
+    MissingColumnError,
+)
+from ainemo.core.termbase.sources.loader import load_into_termbase
+from ainemo.core.termbase.sources.mapping import (
+    field_mapping_from_yaml_dict,
+)
 from ainemo.core.termbase.tbx.exporter import TbxExporter
 from ainemo.core.termbase.tbx.importer import TbxImporter
 from ainemo.core.tm.sqlite import DEFAULT_TM_PATH, SqliteTranslationMemory
@@ -56,6 +69,7 @@ _TB_SUBCMD_IMPORT: Final = "import"
 _TB_SUBCMD_EXPORT: Final = "export"
 _TB_SUBCMD_PROMOTE: Final = "promote"
 _TB_SUBCMD_STATS: Final = "stats"
+_TB_SUBCMD_IMPORT_FROM_CSV: Final = "import-from-csv"
 
 # --- Review-loop input tokens ---
 
@@ -166,6 +180,56 @@ def register_termbase(
     )
     _add_termbase_path(stats_parser)
 
+    # Cycle-4 S4 — import-from-csv. Takes a positional CSV path,
+    # mandatory --map-config (YAML mapping file per cycle-4 S1 +
+    # pre-resolved Q2: no inline --map flags), optional CSV-dialect
+    # overrides, optional --namespace for collision-disambiguation
+    # when the mapping has no `domain_column`.
+    import_csv_parser = tb_sub.add_parser(
+        _TB_SUBCMD_IMPORT_FROM_CSV,
+        help=(
+            "Import a CSV file into the termbase via a YAML field-mapping "
+            "config (e.g. a team's brand glossary, a Google Sheet export)."
+        ),
+    )
+    import_csv_parser.add_argument("csv_path", type=Path)
+    import_csv_parser.add_argument(
+        "--map-config",
+        dest="map_config",
+        type=Path,
+        required=True,
+        help="Path to the YAML field-mapping file (see docs/importers.md, S6).",
+    )
+    import_csv_parser.add_argument(
+        "--encoding",
+        dest="encoding",
+        default=DEFAULT_CSV_ENCODING,
+        help=(
+            "CSV file encoding (default: utf-8). Use `--encoding latin-1` "
+            "for legacy European exports."
+        ),
+    )
+    import_csv_parser.add_argument(
+        "--delimiter",
+        dest="delimiter",
+        default=DEFAULT_CSV_DELIMITER,
+        help=(
+            "CSV field delimiter (default: ','). Use `--delimiter '\\t'` for tab-separated files."
+        ),
+    )
+    import_csv_parser.add_argument(
+        "--namespace",
+        dest="namespace",
+        default=None,
+        help=(
+            "Per-import namespace tag for concept-id derivation. Disambiguates "
+            "two imports that share source surfaces (e.g. `marketing` vs "
+            "`legal`) when the mapping has no `domain_column`. Row-level "
+            "`domain_id` overrides this flag."
+        ),
+    )
+    _add_termbase_path(import_csv_parser)
+
 
 def run_termbase(
     args: argparse.Namespace,
@@ -187,12 +251,15 @@ def run_termbase(
         return _run_promote(args, stdin=stdin, out=out, err=err)
     if sub == _TB_SUBCMD_STATS:
         return _run_stats(args, out=out, err=err)
+    if sub == _TB_SUBCMD_IMPORT_FROM_CSV:
+        return _run_import_from_csv(args, out=out, err=err)
     known = (
         _TB_SUBCMD_INIT,
         _TB_SUBCMD_IMPORT,
         _TB_SUBCMD_EXPORT,
         _TB_SUBCMD_PROMOTE,
         _TB_SUBCMD_STATS,
+        _TB_SUBCMD_IMPORT_FROM_CSV,
     )
     err.write(f"Unknown `nemo termbase` subcommand: {sub!r}. Try one of {', '.join(known)}.\n")
     return _EXIT_USAGE
@@ -324,6 +391,81 @@ def _run_stats(args: argparse.Namespace, *, out: TextIO, err: TextIO) -> int:
     return _EXIT_OK
 
 
+def _run_import_from_csv(args: argparse.Namespace, *, out: TextIO, err: TextIO) -> int:
+    """Cycle-4 S4 — drain a CSV file through CsvSource +
+    load_into_termbase into the configured Kuzu termbase."""
+    csv_path: Path = args.csv_path
+    if not csv_path.exists():
+        err.write(f"CSV file not found: {csv_path}\n")
+        return _EXIT_USAGE
+
+    map_config_path: Path = args.map_config
+    if not map_config_path.exists():
+        err.write(
+            f"Field-mapping file not found: {map_config_path}. "
+            "See docs/importers.md for the YAML schema.\n"
+        )
+        return _EXIT_USAGE
+
+    # Load mapping. yaml.safe_load + the cycle-4 S1 helper give us
+    # one ValueError surface for both shape errors (top-level not a
+    # mapping) and Pydantic validation errors (unknown field, blank
+    # value, missing mandatory field).
+    import yaml
+    from pydantic import ValidationError
+
+    try:
+        raw = yaml.safe_load(map_config_path.read_text(encoding="utf-8"))
+        mapping = field_mapping_from_yaml_dict(raw)
+    except (ValueError, ValidationError, yaml.YAMLError) as exc:
+        err.write(f"Invalid field-mapping in {map_config_path}: {exc}\n")
+        return _EXIT_USAGE
+
+    # Normalize common shell escapes for `--delimiter` before
+    # handing to csv.DictReader, which requires exactly one
+    # character. The help text says `--delimiter '\t'`, but most
+    # shells pass that through as the two-character string `\t`
+    # (the shell doesn't expand backslash escapes inside single or
+    # plain double quotes — only $'...' ANSI-C quoting does, and
+    # most users don't know that). Without normalization, the
+    # operator gets a stdlib TypeError they have to debug.
+    try:
+        delimiter = _normalize_delimiter(args.delimiter)
+    except ValueError as exc:
+        err.write(f"Invalid --delimiter value: {exc}\n")
+        return _EXIT_USAGE
+
+    source = CsvSource(
+        csv_path,
+        mapping,
+        encoding=args.encoding,
+        delimiter=delimiter,
+    )
+    tb = KuzuTermbase(args.termbase_path)
+    try:
+        try:
+            report = load_into_termbase(tb, source, namespace=args.namespace)
+        except (MissingColumnError, CsvDecodeError) as exc:
+            # File-level errors per the TermbaseSource contract —
+            # surface them on stderr with exit 2 so the operator
+            # doesn't have to read a Python traceback.
+            err.write(f"{exc}\n")
+            return _EXIT_USAGE
+    finally:
+        tb.close()
+
+    out.write(
+        f"Imported {report.concepts_added} concepts, "
+        f"{report.terms_added} terms, "
+        f"{report.domains_added} domains.\n"
+    )
+    if report.rows_skipped:
+        out.write(f"  ({report.rows_skipped} rows skipped:)\n")
+        for entry in report.skipped_details:
+            out.write(f"    - {entry}\n")
+    return _EXIT_OK
+
+
 # --- Review loop ---
 
 
@@ -422,6 +564,48 @@ def _derive_promotion_concept_id(candidate: PromotionCandidate) -> str:
     )
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
     return f"tm-promo-{digest[:16]}"
+
+
+_DELIMITER_ESCAPES: Final = {
+    "\\t": "\t",
+    "\\n": "\n",
+    "\\r": "\r",
+    "\\v": "\v",
+    "\\f": "\f",
+    "\\0": "\0",
+}
+
+
+def _normalize_delimiter(value: str) -> str:
+    """Resolve common shell-escaped CSV delimiter inputs to a single
+    character. Cycle-4 S4 P1 fix.
+
+    The help text says ``--delimiter '\\t'``. In most shells that
+    string lands here verbatim as the two-character sequence ``\\t``
+    (Bash, zsh, fish all leave backslash escapes literal inside
+    single and plain double quotes; only ``$'\\t'`` ANSI-C quoting
+    expands). Without this normalization, csv.DictReader raises
+    ``TypeError: "delimiter" must be a 1-character string`` on
+    every tab-separated import.
+
+    Resolution order: known escape sequence → resolved char; single
+    character → returned as-is; anything else → ``ValueError`` with
+    a useful message. We do NOT use ``codecs.decode("unicode_escape")``
+    because that pulls in surprising semantics for unrelated escapes
+    (e.g. ``\\u``); the closed set of supported escapes is more
+    predictable.
+    """
+    if value in _DELIMITER_ESCAPES:
+        return _DELIMITER_ESCAPES[value]
+    if len(value) == 1:
+        return value
+    raise ValueError(
+        f"{value!r} must be exactly one character (or a recognized "
+        f"escape: {sorted(_DELIMITER_ESCAPES)}). "
+        "Most shells pass `--delimiter '\\t'` through verbatim — "
+        "use ANSI-C quoting `$'\\t'` for a literal tab, or rely on "
+        "the recognized-escape normalization."
+    )
 
 
 def _add_termbase_path(parser: argparse.ArgumentParser) -> None:

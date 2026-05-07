@@ -6,7 +6,7 @@
     {"id": 1, "name": "TermbaseSource Protocol + _ids.py constants + ImportRecord/ImportReport/FieldMapping schema", "status": "done",   "moved_at": "2026-05-06"},
     {"id": 2, "name": "CsvSource + load_into_termbase bridge",                                                       "status": "done",   "moved_at": "2026-05-06"},
     {"id": 3, "name": "JsonLinesSource",                                                                             "status": "done",   "moved_at": "2026-05-06"},
-    {"id": 4, "name": "nemo termbase import-from-csv CLI",                                                           "status": "uphill", "moved_at": "2026-05-06"},
+    {"id": 4, "name": "nemo termbase import-from-csv CLI",                                                           "status": "done",   "moved_at": "2026-05-07"},
     {"id": 5, "name": "nemo termbase import-from-jsonl CLI",                                                         "status": "uphill", "moved_at": "2026-05-06"},
     {"id": 6, "name": "Documentation + cycle-4 outcomes hooks",                                                      "status": "uphill", "moved_at": "2026-05-06"}
   ]
