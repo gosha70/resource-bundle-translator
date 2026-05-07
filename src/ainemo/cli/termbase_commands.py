@@ -1,8 +1,8 @@
 # Copyright (c) EGOGE - All Rights Reserved.
 # This software may be used and distributed according to the terms of the GPL-3.0 license.
-"""``nemo termbase`` subcommand — cycle-3 S5.
+"""``nemo termbase`` subcommand — cycle-3 S5 + cycle-4 S4 + S5.
 
-Five sub-subcommands:
+Seven sub-subcommands:
 
 - ``nemo termbase init`` — create a fresh Kuzu termbase + sync the
   three starter personas (cycle-3 S4).
@@ -14,6 +14,11 @@ Five sub-subcommands:
   over the cycle-1 TM. ``--accept-all`` writes every candidate to
   the termbase; ``--review`` (default) walks them interactively.
 - ``nemo termbase stats`` — print termbase counts.
+- ``nemo termbase import-from-csv <file.csv>`` — import a CSV via
+  a YAML field-mapping (cycle-4 S4). Supports ``--encoding``,
+  ``--delimiter``, ``--namespace``.
+- ``nemo termbase import-from-jsonl <file.jsonl>`` — same shape
+  as ``import-from-csv`` but for JSON-Lines (cycle-4 S5).
 
 The ``register_*`` / ``run_*`` split mirrors
 :mod:`ainemo.cli.commands` so the dispatcher in
@@ -49,6 +54,10 @@ from ainemo.core.termbase.sources.csv_source import (
     CsvSource,
     MissingColumnError,
 )
+from ainemo.core.termbase.sources.jsonl_source import (
+    JsonlDecodeError,
+    JsonLinesSource,
+)
 from ainemo.core.termbase.sources.loader import load_into_termbase
 from ainemo.core.termbase.sources.mapping import (
     field_mapping_from_yaml_dict,
@@ -70,6 +79,7 @@ _TB_SUBCMD_EXPORT: Final = "export"
 _TB_SUBCMD_PROMOTE: Final = "promote"
 _TB_SUBCMD_STATS: Final = "stats"
 _TB_SUBCMD_IMPORT_FROM_CSV: Final = "import-from-csv"
+_TB_SUBCMD_IMPORT_FROM_JSONL: Final = "import-from-jsonl"
 
 # --- Review-loop input tokens ---
 
@@ -230,6 +240,47 @@ def register_termbase(
     )
     _add_termbase_path(import_csv_parser)
 
+    # Cycle-4 S5 — import-from-jsonl. Same shape as
+    # import-from-csv minus the CSV-dialect overrides
+    # (--delimiter doesn't apply to JSONL; --encoding stays for
+    # parity but JSONL is conventionally utf-8).
+    import_jsonl_parser = tb_sub.add_parser(
+        _TB_SUBCMD_IMPORT_FROM_JSONL,
+        help=(
+            "Import a JSON-Lines file into the termbase via a YAML "
+            "field-mapping config (e.g. an `npm run extract-terms` "
+            "dump or any one-record-per-line JSON dump)."
+        ),
+    )
+    import_jsonl_parser.add_argument("jsonl_path", type=Path)
+    import_jsonl_parser.add_argument(
+        "--map-config",
+        dest="map_config",
+        type=Path,
+        required=True,
+        help="Path to the YAML field-mapping file (see docs/importers.md, S6).",
+    )
+    import_jsonl_parser.add_argument(
+        "--encoding",
+        dest="encoding",
+        default=DEFAULT_CSV_ENCODING,
+        help=(
+            "JSONL file encoding (default: utf-8). JSONL is utf-8 by "
+            "convention; the override exists for parity with "
+            "`import-from-csv`."
+        ),
+    )
+    import_jsonl_parser.add_argument(
+        "--namespace",
+        dest="namespace",
+        default=None,
+        help=(
+            "Per-import namespace tag for concept-id derivation. Same "
+            "semantics as `import-from-csv --namespace`."
+        ),
+    )
+    _add_termbase_path(import_jsonl_parser)
+
 
 def run_termbase(
     args: argparse.Namespace,
@@ -253,6 +304,8 @@ def run_termbase(
         return _run_stats(args, out=out, err=err)
     if sub == _TB_SUBCMD_IMPORT_FROM_CSV:
         return _run_import_from_csv(args, out=out, err=err)
+    if sub == _TB_SUBCMD_IMPORT_FROM_JSONL:
+        return _run_import_from_jsonl(args, out=out, err=err)
     known = (
         _TB_SUBCMD_INIT,
         _TB_SUBCMD_IMPORT,
@@ -260,6 +313,7 @@ def run_termbase(
         _TB_SUBCMD_PROMOTE,
         _TB_SUBCMD_STATS,
         _TB_SUBCMD_IMPORT_FROM_CSV,
+        _TB_SUBCMD_IMPORT_FROM_JSONL,
     )
     err.write(f"Unknown `nemo termbase` subcommand: {sub!r}. Try one of {', '.join(known)}.\n")
     return _EXIT_USAGE
@@ -449,6 +503,61 @@ def _run_import_from_csv(args: argparse.Namespace, *, out: TextIO, err: TextIO) 
             # File-level errors per the TermbaseSource contract —
             # surface them on stderr with exit 2 so the operator
             # doesn't have to read a Python traceback.
+            err.write(f"{exc}\n")
+            return _EXIT_USAGE
+    finally:
+        tb.close()
+
+    out.write(
+        f"Imported {report.concepts_added} concepts, "
+        f"{report.terms_added} terms, "
+        f"{report.domains_added} domains.\n"
+    )
+    if report.rows_skipped:
+        out.write(f"  ({report.rows_skipped} rows skipped:)\n")
+        for entry in report.skipped_details:
+            out.write(f"    - {entry}\n")
+    return _EXIT_OK
+
+
+def _run_import_from_jsonl(args: argparse.Namespace, *, out: TextIO, err: TextIO) -> int:
+    """Cycle-4 S5 — drain a JSON-Lines file through JsonLinesSource +
+    load_into_termbase into the configured Kuzu termbase.
+
+    Mirrors :func:`_run_import_from_csv` minus the CSV-dialect
+    overrides (no `--delimiter`, no shell-escape normalization);
+    JSONL has no field separator and the encoding default is utf-8
+    by convention.
+    """
+    jsonl_path: Path = args.jsonl_path
+    if not jsonl_path.exists():
+        err.write(f"JSONL file not found: {jsonl_path}\n")
+        return _EXIT_USAGE
+
+    map_config_path: Path = args.map_config
+    if not map_config_path.exists():
+        err.write(
+            f"Field-mapping file not found: {map_config_path}. "
+            "See docs/importers.md for the YAML schema.\n"
+        )
+        return _EXIT_USAGE
+
+    import yaml
+    from pydantic import ValidationError
+
+    try:
+        raw = yaml.safe_load(map_config_path.read_text(encoding="utf-8"))
+        mapping = field_mapping_from_yaml_dict(raw)
+    except (ValueError, ValidationError, yaml.YAMLError) as exc:
+        err.write(f"Invalid field-mapping in {map_config_path}: {exc}\n")
+        return _EXIT_USAGE
+
+    source = JsonLinesSource(jsonl_path, mapping, encoding=args.encoding)
+    tb = KuzuTermbase(args.termbase_path)
+    try:
+        try:
+            report = load_into_termbase(tb, source, namespace=args.namespace)
+        except JsonlDecodeError as exc:
             err.write(f"{exc}\n")
             return _EXIT_USAGE
     finally:
