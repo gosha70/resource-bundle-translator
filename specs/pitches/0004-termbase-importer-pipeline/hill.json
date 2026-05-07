@@ -4,7 +4,7 @@
   "appetite_weeks": 2,
   "scopes": [
     {"id": 1, "name": "TermbaseSource Protocol + _ids.py constants + ImportRecord/ImportReport/FieldMapping schema", "status": "done",   "moved_at": "2026-05-06"},
-    {"id": 2, "name": "CsvSource + load_into_termbase bridge",                                                       "status": "uphill", "moved_at": "2026-05-06"},
+    {"id": 2, "name": "CsvSource + load_into_termbase bridge",                                                       "status": "done",   "moved_at": "2026-05-06"},
     {"id": 3, "name": "JsonLinesSource",                                                                             "status": "uphill", "moved_at": "2026-05-06"},
     {"id": 4, "name": "nemo termbase import-from-csv CLI",                                                           "status": "uphill", "moved_at": "2026-05-06"},
     {"id": 5, "name": "nemo termbase import-from-jsonl CLI",                                                         "status": "uphill", "moved_at": "2026-05-06"},

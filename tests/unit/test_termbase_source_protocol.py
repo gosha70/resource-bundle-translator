@@ -15,7 +15,7 @@ This file pins the contract.
 
 from __future__ import annotations
 
-from typing import Iterator
+from typing import ClassVar, Iterator
 
 import pytest
 
@@ -36,6 +36,8 @@ pytestmark = pytest.mark.unit
 class _StubSource:
     """Minimal :class:`TermbaseSource` test double — yields whatever
     items it was constructed with."""
+
+    provenance: ClassVar[str] = "stub-source"
 
     def __init__(self, items: list[ImportRecord | SkippedRow]) -> None:
         self._items = items
