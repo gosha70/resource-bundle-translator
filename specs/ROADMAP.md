@@ -33,7 +33,7 @@ The defensible product is the **intersection of all four**, plus a CC0/CC-BY-onl
 
 ## Cycle plan
 
-Each cycle below is a single Shape-Up bet. Cycles 0–2 are shipped; 3 onward is provisional and will be re-shaped before betting.
+Each cycle below is a single Shape-Up bet. Cycles 0–4 are shipped; 5 onward is provisional and will be re-shaped before betting.
 
 | # | Title | Appetite | Status | Goal in one line |
 |---|---|---|---|---|
@@ -41,7 +41,7 @@ Each cycle below is a single Shape-Up bet. Cycles 0–2 are shipped; 3 onward is
 | 1 | Foundation: Adapters + TM + Validators | 6w | **shipped** (216 tests; CLI ships with `_NoOpProvider` until cycle 2 wires the router) | Four bundle adapters, SQLite TM with embedding fuzzy match, four validators, end-to-end pipeline, `nemo` CLI. |
 | 2 | Provider Abstraction + Gradle Plugin | 6w | **shipped** (PR #7 merged 2026-05-05; retro: [`retros/cycle-2.md`](retros/cycle-2.md)) | Pluggable LLM providers (Anthropic + Ollama added) + first Gradle plugin for JVM `.properties`. |
 | 3 | Concept-Oriented Termbase via Kuzu | 6w | **shipped** (PRs #8/#9/#10/#11/#12/#13 merged 2026-05-06; pitch: [`pitches/0003-kuzu-termbase/pitch.md`](pitches/0003-kuzu-termbase/pitch.md); retro: see cooldown) | Concept/Term/Domain/Persona graph in Kuzu, TBX 3.0 round-trip, three starter personas, auto-promotion CLI, pipeline + daemon persona injection. |
-| 4 | First Domain Pack: legal-en | 6w | stub | Pack format spec, IATE+EuroVoc-derived legal-en pack, Wikidata anchors. |
+| 4 | Pluggable Termbase Importer Pipeline | 2w | **shipped** (PRs #15/#16/#17/#18/#19/#20 merged 2026-05-07; pitch: [`pitches/0004-termbase-importer-pipeline/pitch.md`](pitches/0004-termbase-importer-pipeline/pitch.md); retro: [`retros/cooldown-after-04.md`](retros/cooldown-after-04.md)) | `TermbaseSource` Protocol, `CsvSource` + `JsonLinesSource`, `nemo termbase import-from-csv` + `import-from-jsonl` CLI, namespace-aware content-addressed concept ids. Reshaped at /bet from `0004-legal-en-pack` against audience-fit pushback (legal-en pack served <5%; importer serves the 90%+). |
 | 5 | Reviewer Web UI + QA Layer | 6w | stub | Auto-promotion review queue, confidence scoring, back-translation QA. |
 | 6 | Multi-Platform Expansion | 6w | stub | Maven plugin, npm plugin, `.xcstrings` and Fluent adapters. |
 | 7+ | Additional domain packs | recurring | future | medical-en (MeSH), aerospace-en, finance-en (IATE finance subset). |
@@ -123,13 +123,38 @@ Nine reviewer-validated bug fixes landed mid-cycle, every one with a regression 
 
 **Scope-hammered out**: graph query DSL on top of Cypher (use Kuzu's API directly), pre-populating concepts from external ontologies (cycle 4+), embedding-based term lookup (deferred until benchmark warrants), reviewer web UI (cycle 5), TBX 2.x compatibility (3.0 only).
 
-## Cycle 4 — First Domain Pack: legal-en (6 weeks)
+## Cycle 4 — Pluggable Termbase Importer Pipeline (shipped)
 
-**Provisional outcome**: Domain pack format spec (versioned artifact, distributable via Maven Central + PyPI). One real pack: `legal-en` derived from IATE legal subset + EuroVoc legal branch, ~2k concepts, with Wikidata QID anchors where available. Pack loader with version resolution. CLI: `nemo pack install legal-en@1.0`.
+**Pitch**: [pitches/0004-termbase-importer-pipeline/pitch.md](pitches/0004-termbase-importer-pipeline/pitch.md) — status `shipped`.
+**Retro**: folded into [retros/cooldown-after-04.md](retros/cooldown-after-04.md) § "Cycle 4 — what shipped" (the 2w / 6-scope shape did not warrant a standalone `cycle-4.md`).
+**Shipped**: 2026-05-07 via PRs [#15](https://github.com/gosha70/resource-bundle-translator/pull/15) (S1: `TermbaseSource` Protocol + `FieldMapping` schema), [#16](https://github.com/gosha70/resource-bundle-translator/pull/16) (S2: `CsvSource` + `load_into_termbase`), [#17](https://github.com/gosha70/resource-bundle-translator/pull/17) (S3: `JsonLinesSource`), [#18](https://github.com/gosha70/resource-bundle-translator/pull/18) (S4: `nemo termbase import-from-csv` CLI), [#19](https://github.com/gosha70/resource-bundle-translator/pull/19) (S5: `nemo termbase import-from-jsonl` CLI), and [#20](https://github.com/gosha70/resource-bundle-translator/pull/20) (S6: docs).
 
-**Why legal first**: IATE + EuroVoc have the cleanest open licensing and the most volume. Legal terminology is also the domain where bad translations have the highest cost — a compelling demo.
+All 6 scopes landed inside the 2-week appetite (actual session execution: hours). Cycle 4 ships the **pluggable termbase importer pipeline** — a `TermbaseSource` Protocol over `core/termbase/sources/`; concrete `CsvSource` (RFC 4180 default + `--encoding` / `--delimiter` overrides) and `JsonLinesSource` (UTF-8, strict-on-all-mapped-columns); a Pydantic-strict `FieldMapping` YAML schema (`extra="forbid"` per cycle-3 S4 lesson); a `load_into_termbase(tb, source, *, namespace=None)` bridge with content-addressed concept ids over a `(source_lang, source_term, namespace)` triple; the `nemo termbase import-from-csv` / `import-from-jsonl` CLI surfaces with `--map-config` / `--namespace` / per-format dialect flags; and full reference docs ([`docs/importers.md`](../docs/importers.md), README "Import your team's glossary" section).
 
-**Likely no-gos**: medical, aerospace, finance packs (those are cycle 7+); a pack registry server (use Maven Central / PyPI directly).
+**Audience-fit reshape at /bet**: the original `0004-legal-en-pack` shape (6w, pre-built `legal-en` pack with PyPI/Maven Central distribution + license-attribution work) was reshaped into the 2w importer pipeline against direct user pushback that the pre-built pack served <5% of AI-NEMO's actual audience (software i18n teams loading their own glossaries). The reshape lesson is now project memory `feedback_stay_in_audience_scope.md`. The pre-built `legal-en` pack moved to cycle 7+ as content-only work, contingent on real user demand.
+
+Eight reviewer-validated bug fixes landed mid-cycle, every one with a regression test (full table at [`retros/cooldown-after-04.md`](retros/cooldown-after-04.md) § "Reviewer-validated fixes"):
+
+- **S1 P2** — concept-id derivation collapsed same-source-term-different-domain rows; fixed via `(source_lang, source_term, namespace)` triple, pinned by namespace-collision contract test.
+- **S2 P2** — on-disk concept-id format had no literal-hash regression test; added one for `_derive_import_concept_id` to guard against silent refactor drift.
+- **S2 P2** — `CsvDecodeError` now wraps `UnicodeDecodeError` and names `--encoding latin-1` verbatim in the message, so the user sees the workaround in the error.
+- **S3 P2** — initial JSONL parse-error path cited "RFC 7464" (a different spec); rewritten to reference jsonlines.org honestly.
+- **S3 P2** — strict-on-all-mapped-columns policy (string|null only); `JsonlDecodeError` carries `__cause__` for byte-offset traceability.
+- **S4 P1** — `--delimiter '\t'` argparse normalization via a closed-set escape map (`\t \n \r \v \f \0`) since shells leave backslash escapes literal in single/plain double quotes; multi-character delimiters rejected with clean stderr.
+- **S6 P2** — README top status block was stale (still said cycles 0–2 shipped, cycle 3 next); fixed to reflect cycles 0–3 shipped + cycle 4 closing, plus cycle table updated.
+- **S6 P3** — JSONL skip-reason phrasing in `docs/importers.md` realigned to the actual `JsonLinesSource` output (Python type names) rather than paraphrased prose.
+
+**Cycle-4 limitations carried forward** (cooldown candidates):
+
+- README cycle-table status block has no automated consistency check against pitch frontmatter `bet_status` — every cycle's docs scope has to remember to update it. Cooldown one-liner candidate.
+- CSV encoding sniffer (stdlib-only — BOM detection + utf-8 attempt + latin-1 fallback) is a possible cooldown investigation; not committed unless the failure modes are honest. `chardet` is rejected at shaping (5+ MB dep).
+- Multi-column compound source terms via richer mapping DSL — the circuit-breaker carve-out scenario that did not fire. Defer until a real user surfaces it.
+- `SkosRdfSource` and additional source formats stay deferred to cycle 7+ per pre-resolved Q1.
+- Pre-built `legal-en` domain pack — moved off the near-cycle roadmap entirely. Cycle 7+ as content-only work, contingent on real user demand.
+
+**Why this was cycle 4**: the cycle-3 termbase + persona substrate had two import paths (TBX + TM auto-promotion) and neither matched what most i18n teams have on hand (CSVs from marketing, JSON dumps from extraction scripts). Cycle 4 plugs the gap so the cycle-3 substrate is actually useful to the project's actual audience.
+
+**Scope-hammered out**: pre-built `legal-en` / `medical-en` / etc. packs (cycle 7+, content-only, demand-driven), data redistribution from AI-NEMO (importer-only design — license terms apply to the user's data, not to AI-NEMO), SPARQL / RDF / SKOS / IATE-XML / proprietary-CAT-tool source formats (cycle 7+ if asked), Wikidata QID enrichment (cycle 7+ if asked), CSV header auto-detection (rejected at shaping — explicit `--map-config` is more honest).
 
 ## Cycle 5 — Reviewer Web UI + QA Layer (6 weeks)
 

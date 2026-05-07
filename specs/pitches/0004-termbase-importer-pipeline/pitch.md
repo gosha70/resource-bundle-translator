@@ -2,7 +2,7 @@
 pitch_id: 0004-termbase-importer-pipeline
 title: "Cycle 4 — Pluggable Termbase Importer Pipeline"
 appetite: 2w
-bet_status: building
+bet_status: shipped
 cycle: "04"
 circuit_breaker: "If CSV field-mapping turns out to need more than YAML can express (multi-column compound source terms; per-row computed targets), ship CSV-only (S1, S2, S4, S6) and shelve JSON-Lines (S3 + S5) + the richer mapping DSL to a cycle-4 cooldown one-liner. The CSV importer + CLI is the moat-builder for cycle-4's audience (i18n teams loading their own glossaries); JSON-Lines is the second-source nice-to-have."
 shaped_by: gosha70
@@ -20,7 +20,7 @@ shaped_date: 2026-05-06
 
 - **ID**: 0004
 - **Appetite**: 2w (wall-clock ceiling; actual session execution measured in hours per project memory rule *Calibrate estimates for Claude Code, not human-days*)
-- **Status**: building (cycle 04 open for execution)
+- **Status**: shipped (cycle 04 closed 2026-05-07; see [`cooldown-after-04.md`](../../retros/cooldown-after-04.md))
 - **Owner**: gosha70
 
 ## Problem
@@ -62,7 +62,7 @@ The cycle-3 cooldown report flagged the cycle-4 ROADMAP slot (a pre-built `legal
 ┌─ Cycle 4 adds ────────────────────────────────────────────────────┐
 │                                                                   │
 │   TermbaseSource Protocol  (new — `core/termbase/sources/base.py`)│
-│      └── iter_concepts(...) -> Iterator[ImportRecord]             │
+│      └── iter_concepts(...) -> Iterator[ImportRecord|SkippedRow]  │
 │                                                                   │
 │   Concrete impls:                                                 │
 │      • CsvSource             (S2 — primary user value)            │
@@ -150,7 +150,7 @@ class TermbaseSource(Protocol):
     Cycle 4 ships CsvSource + JsonLinesSource; cycle 7+ may add
     SkosRdfSource / Wikidata-enricher if real demand surfaces."""
 
-    def iter_concepts(self) -> Iterator[ImportRecord]: ...
+    def iter_concepts(self) -> Iterator[ImportRecord | SkippedRow]: ...
 ```
 
 **`core/termbase/sources/csv_source.py`** — `CsvSource`:
@@ -166,7 +166,7 @@ class CsvSource:
         delimiter: str = DEFAULT_CSV_DELIMITER,
     ) -> None: ...
 
-    def iter_concepts(self) -> Iterator[ImportRecord]: ...
+    def iter_concepts(self) -> Iterator[ImportRecord | SkippedRow]: ...
 ```
 
 **`core/termbase/sources/jsonl_source.py`** — `JsonLinesSource` (same shape as CsvSource; reads one JSON object per line and applies the same FieldMapping over its keys).
@@ -229,7 +229,7 @@ This prevents collisions when the *same* surface appears in *different* domains.
 
 ### S5: `nemo termbase import-from-jsonl` CLI
 
-`core/termbase/sources/jsonl_source.py` is wired into a new sub-subcommand. Same shape as S4's CLI; same `--map-config` + `--namespace` flags; no `--delimiter` / `--encoding` (JSONL is UTF-8 by spec). `tests/integration/test_termbase_import_jsonl_cli.py` (≥ 4 cases incl. round-trip to `nemo termbase stats`, malformed-line skip surfaces in stdout, idempotent re-run). **Estimate: ~30 min.**
+`core/termbase/sources/jsonl_source.py` is wired into a new sub-subcommand. Same shape as S4's CLI; same `--map-config` + `--namespace` flags; no `--delimiter` (JSONL has no field separator). `--encoding` retained for parity with `import-from-csv` (JSONL is UTF-8 by convention but the override exists for non-UTF-8 dumps). `tests/integration/test_termbase_import_jsonl_cli.py` (≥ 4 cases incl. round-trip to `nemo termbase stats`, malformed-line skip surfaces in stdout, idempotent re-run, latin-1 round-trip via `--encoding`, decode-error surfaces `--encoding` hint). **Estimate: ~30 min.**
 
 ### S6: Documentation + cycle-4 outcomes hooks
 
@@ -338,3 +338,4 @@ Context for "exhausted" on this pitch: the cycle-4 surface is small enough that 
 | 2026-05-06 | refined | Re-review surfaced three follow-on inconsistencies from the first refinement pass. (P2) The authoritative `load_into_termbase` interface block still showed `(tb, source)` after the surrounding prose was updated to thread `namespace`; fix: keyword-only `namespace: str | None = None` parameter added to the signature with explicit documentation that the CLI's `--namespace` flag forwards to it. (P2) The § Solution shape diagram still advertised "YAML or inline `--map`" after pre-resolved Q2 explicitly rejected inline mapping; fix: diagram now says "YAML file via `--map-config`" only. (P3) The § Risks idempotency note still described the hash as `source_lang+source_term`; fix: rewritten to cover the three identity fields (source_term, target rendering, namespace) and the orphan behavior on each. No scope or estimate changes. |
 | 2026-05-06 | bet | Bet for cycle 04. |
 | 2026-05-06 | building | /cycle-start: hill.json initialized with all 6 scopes uphill (S1–S6); bet_status flipped bet → building. Cycle 04 is open for execution. |
+| 2026-05-07 | shipped | Cycle 04 closed. All 6/6 scopes done: TermbaseSource Protocol + FieldMapping schema (S1, PR #15), CsvSource + load_into_termbase bridge (S2, PR #16), JsonLinesSource (S3, PR #17), `nemo termbase import-from-csv` CLI (S4, PR #18), `nemo termbase import-from-jsonl` CLI (S5, PR #19), and docs/importers.md + README "Import your team's glossary" + termbase.md cross-link (S6, PR #20). |
