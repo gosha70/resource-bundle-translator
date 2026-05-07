@@ -2,7 +2,7 @@
 pitch_id: 0004-termbase-importer-pipeline
 title: "Cycle 4 — Pluggable Termbase Importer Pipeline"
 appetite: 2w
-bet_status: bet
+bet_status: building
 cycle: "04"
 circuit_breaker: "If CSV field-mapping turns out to need more than YAML can express (multi-column compound source terms; per-row computed targets), ship CSV-only (S1, S2, S4, S6) and shelve JSON-Lines (S3 + S5) + the richer mapping DSL to a cycle-4 cooldown one-liner. The CSV importer + CLI is the moat-builder for cycle-4's audience (i18n teams loading their own glossaries); JSON-Lines is the second-source nice-to-have."
 shaped_by: gosha70
@@ -20,7 +20,7 @@ shaped_date: 2026-05-06
 
 - **ID**: 0004
 - **Appetite**: 2w (wall-clock ceiling; actual session execution measured in hours per project memory rule *Calibrate estimates for Claude Code, not human-days*)
-- **Status**: bet (locked for cycle 04, awaiting /cycle-start)
+- **Status**: building (cycle 04 open for execution)
 - **Owner**: gosha70
 
 ## Problem
@@ -337,3 +337,4 @@ Context for "exhausted" on this pitch: the cycle-4 surface is small enough that 
 | 2026-05-06 | refined | Pre-/bet review surfaced two pitch-level P2s. (1) Concept-id derivation collapsed same-source-term-different-domain rows; fix: hash includes a third `namespace` component derived from row `domain_id` → per-import `--namespace` flag → empty-global, with documented merge semantics. Test strategy gains a namespace-collision contract (unit + integration). (2) Combined CSV/JSONL CLI scope made the CSV-only circuit-breaker subset under-defined; fix: split S4 into S4 (CSV CLI) + S5 (JSONL CLI), bumping scope count to 6 and making the breaker drop S3 + S5 cleanly while keeping S4 self-contained. Docs scope renumbered S5 → S6. |
 | 2026-05-06 | refined | Re-review surfaced three follow-on inconsistencies from the first refinement pass. (P2) The authoritative `load_into_termbase` interface block still showed `(tb, source)` after the surrounding prose was updated to thread `namespace`; fix: keyword-only `namespace: str | None = None` parameter added to the signature with explicit documentation that the CLI's `--namespace` flag forwards to it. (P2) The § Solution shape diagram still advertised "YAML or inline `--map`" after pre-resolved Q2 explicitly rejected inline mapping; fix: diagram now says "YAML file via `--map-config`" only. (P3) The § Risks idempotency note still described the hash as `source_lang+source_term`; fix: rewritten to cover the three identity fields (source_term, target rendering, namespace) and the orphan behavior on each. No scope or estimate changes. |
 | 2026-05-06 | bet | Bet for cycle 04. |
+| 2026-05-06 | building | /cycle-start: hill.json initialized with all 6 scopes uphill (S1–S6); bet_status flipped bet → building. Cycle 04 is open for execution. |
