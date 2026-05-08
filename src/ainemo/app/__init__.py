@@ -137,6 +137,10 @@ def create_app(
 
     register_qa(app)
 
+    from ainemo.app.views.personas import register_personas
+
+    register_personas(app)
+
     return app
 
 

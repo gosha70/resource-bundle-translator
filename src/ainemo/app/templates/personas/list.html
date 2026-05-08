@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}AI-NEMO Reviewer — Personas{% endblock %}
+
+{% block content %}
+<h1>Personas</h1>
+<p>Read-only inspector. Persona editing is deferred to a later cycle.</p>
+
+{% if personas %}
+<table class="personas-list">
+  <thead>
+    <tr>
+      <th>persona_id</th>
+      <th>Name</th>
+      <th>Domain</th>
+      <th>Register</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in personas %}
+    <tr>
+      <td><a href="{{ url_for('personas.persona_detail', persona_id=p.persona_id) }}">{{ p.persona_id }}</a></td>
+      <td>{{ p.name }}</td>
+      <td>{{ p.domain_id or '—' }}</td>
+      <td>{{ p.register or '—' }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p><em>No personas synced into this termbase. Run <code>nemo termbase init</code> to sync the three starter personas.</em></p>
+{% endif %}
+{% endblock %}

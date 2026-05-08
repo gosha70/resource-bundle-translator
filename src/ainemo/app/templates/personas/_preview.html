@@ -1,0 +1,10 @@
+<div class="persona-preview" id="persona-preview-{{ persona.persona_id }}">
+  <h3>Preview for {{ persona.persona_id }}</h3>
+  <p>Source ({{ source_lang }} → {{ target_lang }}): <code>{{ source_text }}</code></p>
+  {% if block %}
+  <p>System-prompt addendum (byte-equivalent to pipeline injection):</p>
+  <pre class="glossary-block">{{ block }}</pre>
+  {% else %}
+  <p><em>No glossary hits for this segment under this persona's domain filter.</em></p>
+  {% endif %}
+</div>

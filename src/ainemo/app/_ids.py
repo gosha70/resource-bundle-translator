@@ -39,6 +39,7 @@ ROUTE_TERMBASE_LIST: Final = "termbase_list"
 ROUTE_TERMBASE_EDIT: Final = "termbase_edit"
 ROUTE_TERMBASE_EXPORT: Final = "termbase_export"
 ROUTE_PERSONA_LIST: Final = "persona_list"
+ROUTE_PERSONA_DETAIL: Final = "persona_detail"
 ROUTE_PERSONA_PREVIEW: Final = "persona_preview"
 ROUTE_QA_CONFIDENCE: Final = "qa_confidence"
 ROUTE_QA_BACK_TRANSLATE: Final = "qa_back_translate"
@@ -102,6 +103,7 @@ __all__ = [
     "ROUTE_IMPORT_REPLAY",
     "ROUTE_IMPORT_SKIPS",
     "ROUTE_PERSONA_LIST",
+    "ROUTE_PERSONA_DETAIL",
     "ROUTE_PERSONA_PREVIEW",
     "ROUTE_PROMOTE_DECIDE",
     "ROUTE_PROMOTE_QUEUE",
