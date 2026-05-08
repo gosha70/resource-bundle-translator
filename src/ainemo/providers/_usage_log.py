@@ -25,10 +25,11 @@ JSONL was chosen over a SQLite table because:
 from __future__ import annotations
 
 import json
+import statistics
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Final, Iterator
+from typing import Final, Iterator, Mapping
 
 # --- Module constants (no magic strings; AGENTS.md § Prohibited Patterns) ---
 
@@ -145,6 +146,74 @@ class UsageLog:
             by_model=by_model,
         )
 
+    def estimate_for(
+        self,
+        provider_id: str,
+        model: str | None,
+        total_tokens: int,
+    ) -> float | None:
+        """Return an estimated USD cost for a call that consumes
+        ``total_tokens`` (input + output) via ``(provider_id, model)``.
+
+        Computed from the **median** cost-per-token of historical records
+        on the same JSONL log, multiplied by ``total_tokens``.  Median
+        is used rather than mean because a single anomalous batch (e.g.
+        a very large segment sent during a benchmark run) would inflate
+        the mean and over-estimate every subsequent display.
+
+        Callers that have a character count rather than a token count
+        should use :func:`estimate_tokens_from_chars` to convert first
+        — token / character ratios are model-specific, but ~4 chars per
+        token is a defensible English default.
+
+        Parameters
+        ----------
+        provider_id:
+            The provider id to filter on (must match ``FIELD_PROVIDER``).
+        model:
+            When not ``None``, also filters by ``FIELD_MODEL == model``.
+            When ``None``, matches **any** model for ``provider_id`` —
+            useful when the caller knows the provider but not the model
+            it will select.
+        total_tokens:
+            Estimated total tokens (input + output) for the call.  Used
+            as the multiplier: ``estimate = median_cost_per_token * total_tokens``.
+
+        Returns
+        -------
+        float
+            Estimated USD cost.
+        None
+            When no historical records exist for this
+            ``(provider_id, model)`` combination, when all matching
+            records have a null or non-positive ``cost_usd``, or when
+            token counts imply a zero-length call.
+        """
+        cost_per_token_samples: list[float] = []
+        for record in self._iter_records():
+            if str(record.get(FIELD_PROVIDER, "")) != provider_id:
+                continue
+            if model is not None and str(record.get(FIELD_MODEL, "")) != model:
+                continue
+            cost_raw = record.get(FIELD_COST_USD)
+            if cost_raw is None:
+                continue
+            cost = _as_float(cost_raw)
+            if cost <= 0.0:
+                continue
+            tokens_in_record = _as_int(record.get(FIELD_INPUT_TOKENS)) + _as_int(
+                record.get(FIELD_OUTPUT_TOKENS)
+            )
+            if tokens_in_record <= 0:
+                continue
+            cost_per_token_samples.append(cost / tokens_in_record)
+
+        if not cost_per_token_samples:
+            return None
+
+        median_cost_per_token = statistics.median(cost_per_token_samples)
+        return median_cost_per_token * total_tokens
+
     def _iter_records(self) -> Iterator[dict[str, object]]:
         if not self._path.exists():
             return
@@ -186,8 +255,70 @@ def _as_float(value: object) -> float:
     return 0.0
 
 
+# Default token-per-character ratio for English text.
+# 4 characters per token is the GPT-3/4 OpenAI rule of thumb; other
+# tokenizers vary 2.5–5. Used by ``estimate_tokens_from_chars`` when the
+# caller has only a character count (e.g. the QA layer's segment view).
+_DEFAULT_CHARS_PER_TOKEN: Final[float] = 4.0
+
+
+_PROVIDER_CHARS_PER_TOKEN: Final[Mapping[str, float]] = {
+    # OpenAI tiktoken cl100k — ~4 chars/token for English; documented at
+    # platform.openai.com/tokenizer.
+    "openai": 4.0,
+    # Anthropic Claude — no published ratio; 3.5 chars/token is a defensible
+    # English estimate from public tokenizer comparisons. Treat as ±50%.
+    "anthropic": 3.5,
+    # NLLB-200 SentencePiece — averages ~2.5 chars/subword on European
+    # languages per the FLORES-200 evaluation set.
+    "nllb": 2.5,
+    # Helsinki-NLP OPUS-MT — SentencePiece, similar density.
+    "opus": 2.5,
+    # Ollama covers many local models with very different tokenizers;
+    # 4.0 is a conservative default that errs on under-counting tokens
+    # (and therefore under-estimating cost — local providers are usually
+    # zero-cost anyway).
+    "ollama": 4.0,
+}
+
+
+def estimate_tokens_from_chars(
+    char_count: int,
+    *,
+    provider_id: str | None = None,
+    chars_per_token: float | None = None,
+) -> int:
+    """Convert a character count to an approximate token count.
+
+    Token-per-character ratios are tokenizer-specific. This helper does
+    a best-effort conversion in three layers, in priority order:
+
+    1. ``chars_per_token`` (caller-supplied override) — used as-is.
+    2. ``provider_id`` (when provided and known) — looked up in
+       :data:`_PROVIDER_CHARS_PER_TOKEN`. OpenAI, Anthropic, NLLB, OPUS,
+       Ollama have entries; unknown ids fall through.
+    3. The English default ``_DEFAULT_CHARS_PER_TOKEN = 4.0`` (OpenAI
+       tiktoken rule of thumb) when neither is supplied.
+
+    The result is a **rough order-of-magnitude estimate**, not a binding
+    figure. Callers surfacing this value to users should frame it as
+    "estimated cost (±50%)" rather than imply precision — token /
+    character ratios fluctuate per language, per content shape, and per
+    tokenizer minor version.
+    """
+    if char_count <= 0:
+        return 0
+    if chars_per_token is None:
+        if provider_id is not None and provider_id in _PROVIDER_CHARS_PER_TOKEN:
+            chars_per_token = _PROVIDER_CHARS_PER_TOKEN[provider_id]
+        else:
+            chars_per_token = _DEFAULT_CHARS_PER_TOKEN
+    return max(1, int(round(char_count / chars_per_token)))
+
+
 __all__ = [
     "DEFAULT_USAGE_LOG_PATH",
     "UsageLog",
     "UsageStats",
+    "estimate_tokens_from_chars",
 ]

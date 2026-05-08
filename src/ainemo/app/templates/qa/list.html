@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}AI-NEMO — QA Confidence{% endblock %}
+
+{% block content %}
+<h1>QA Confidence</h1>
+
+<form method="get" action="{{ url_for('qa.qa_confidence') }}">
+  <label>Source lang: <input type="text" name="source_lang" value="{{ source_lang }}" size="8"></label>
+  <label>Target lang: <input type="text" name="target_lang" value="{{ target_lang }}" size="8"></label>
+  <label>Limit: <input type="number" name="limit" value="{{ limit }}" min="1" max="500" size="6"></label>
+  <button type="submit">Refresh</button>
+</form>
+
+<p>
+  Showing up to {{ limit }} segments for
+  <strong>{{ source_lang }}</strong> → <strong>{{ target_lang }}</strong>.
+  Cheap signals are computed from existing TM data — no provider call is made on this page.
+</p>
+
+{% if rows %}
+<table class="qa-list">
+  <thead>
+    <tr>
+      <th>Source</th>
+      <th>Translation</th>
+      <th>Provider</th>
+      <th>Termbase<br>cosine</th>
+      <th>Placeholder<br>parity</th>
+      <th>Length<br>budget</th>
+      <th>BT cosine</th>
+      <th>Composite</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr id="qa-summary-{{ row.translated_fingerprint }}">
+      <td>{{ row.source_text }}</td>
+      <td>{{ row.target_text }}</td>
+      <td>{{ row.provider }}</td>
+      <td>{{ "%.3f" | format(row.signals.termbase_cosine) }}</td>
+      <td>{{ "%.1f" | format(row.signals.placeholder_parity) }}</td>
+      <td>{{ "%.1f" | format(row.signals.length_budget) }}</td>
+      <td>
+        {% if row.signals.back_translation_cosine is not none %}
+          {{ "%.3f" | format(row.signals.back_translation_cosine) }}
+        {% else %}—{% endif %}
+      </td>
+      <td><strong>{{ "%.3f" | format(row.signals.composite) }}</strong></td>
+      <td>
+        <a href="{{ url_for('qa.qa_segment', fingerprint=row.translated_fingerprint, source_lang=source_lang, target_lang=target_lang) }}">Detail</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No translations found for this language pair. Run <code>nemo translate</code> first.</p>
+{% endif %}
+{% endblock %}

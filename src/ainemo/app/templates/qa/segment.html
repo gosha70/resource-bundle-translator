@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+
+{% block title %}AI-NEMO — QA Segment Detail{% endblock %}
+
+{% block content %}
+<h1>Segment Detail</h1>
+<p><a href="{{ url_for('qa.qa_confidence', source_lang=source_lang, target_lang=target_lang) }}">&larr; Back to QA list</a></p>
+
+{% include "qa/_row.html" %}
+{% endblock %}

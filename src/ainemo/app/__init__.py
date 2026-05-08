@@ -133,6 +133,10 @@ def create_app(
 
     register_termbase(app)
 
+    from ainemo.app.views.qa import register_qa
+
+    register_qa(app)
+
     return app
 
 
