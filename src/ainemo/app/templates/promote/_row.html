@@ -1,0 +1,77 @@
+<div class="candidate-row" id="candidate-{{ ac.candidate.source_ngram | replace(' ', '-') }}">
+
+  <h3>{{ ac.candidate.source_ngram }}</h3>
+  <p>
+    Frequency: <strong>{{ ac.candidate.frequency }}</strong> &nbsp;
+    Consistency: <strong>{{ "%.2f" | format(ac.candidate.consistency) }}</strong> &nbsp;
+    Suggested: <strong>{{ ac.candidate.suggested_target }}</strong>
+  </p>
+
+  {% if decided %}
+  <p><em>Decision recorded: {{ decision }}.</em></p>
+  {% else %}
+
+  {% if ac.segment_previews %}
+  <details>
+    <summary>Contributing TM segments ({{ ac.segment_previews | length }})</summary>
+    <table>
+      <thead><tr><th>Source</th><th>Provider</th><th>Model</th><th>Translation</th></tr></thead>
+      <tbody>
+        {% for preview in ac.segment_previews %}
+        <tr>
+          <td>{{ preview.source_text }}</td>
+          <td>{{ preview.provider }}</td>
+          <td>{{ preview.model }}</td>
+          <td>{{ preview.target_text }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </details>
+  {% endif %}
+
+  {% if ac.existing_hits %}
+  <details>
+    <summary>Existing termbase concepts ({{ ac.existing_hits | length }})</summary>
+    <ul>
+      {% for hit in ac.existing_hits %}
+      <li>
+        <strong>{{ hit.matched_source_term.surface }}</strong>
+        {% if hit.target_terms %}
+          &rarr; {{ hit.target_terms | map(attribute='surface') | join(', ') }}
+        {% else %}
+          (no target term)
+        {% endif %}
+        <em>(concept {{ hit.concept.concept_id }})</em>
+      </li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+
+  <!-- S5 extension point: confidence signals (MiniLM cosine, placeholder parity,
+       length budget, back-translation cosine) are retrofitted here in S5. -->
+  <div class="confidence-stub" data-fingerprints="{{ ac.candidate.contributing_segment_fingerprints | join(',') }}"></div>
+
+  <form
+    hx-post="{{ url_for('promote.promote_decide') }}"
+    hx-target="closest .candidate-row"
+    hx-swap="outerHTML"
+  >
+    <input type="hidden" name="source_ngram" value="{{ ac.candidate.source_ngram }}">
+    <input type="hidden" name="source_lang" value="{{ ac.candidate.source_lang }}">
+    <input type="hidden" name="target_lang" value="{{ ac.candidate.target_lang }}">
+    <input type="hidden" name="suggested_target" value="{{ ac.candidate.suggested_target }}">
+
+    <button type="submit" name="decision" value="accept">Accept</button>
+    <button type="submit" name="decision" value="reject">Reject</button>
+
+    <label>
+      Edit target:
+      <input type="text" name="edited_target_surface" placeholder="{{ ac.candidate.suggested_target }}" size="30">
+    </label>
+    <button type="submit" name="decision" value="edit">Accept edited</button>
+  </form>
+
+  {% endif %}
+</div>

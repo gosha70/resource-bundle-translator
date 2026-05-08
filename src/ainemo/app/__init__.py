@@ -123,6 +123,10 @@ def create_app(
     register_jinja_globals(app)
     _register_routes(app)
 
+    from ainemo.app.views.promote import register_promote
+
+    register_promote(app)
+
     return app
 
 

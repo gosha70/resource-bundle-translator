@@ -2,10 +2,10 @@
   "pitch_id": "0005-reviewer-ui-qa-layer",
   "started_at": "2026-05-07",
   "appetite_weeks": 6,
-  "updated_at": "2026-05-07T00:00:00Z",
+  "updated_at": "2026-05-07T01:00:00Z",
   "scopes": [
     {"id": 1, "name": "Flask app scaffolding + DI factory + nemo app run CLI",                                       "status": "done",     "moved_at": "2026-05-07", "last_updated": "2026-05-07T00:00:00Z"},
-    {"id": 2, "name": "Auto-promotion candidate queue (/promote)",                                                   "status": "uphill", "moved_at": "2026-05-07"},
+    {"id": 2, "name": "Auto-promotion candidate queue (/promote)",                                                   "status": "done",   "moved_at": "2026-05-07", "last_updated": "2026-05-07T00:00:00Z"},
     {"id": 3, "name": "Import-skip queue (/imports) + ImportSkipStore + SkippedRow payload extension",               "status": "uphill", "moved_at": "2026-05-07"},
     {"id": 4, "name": "Termbase curation (/termbase)",                                                               "status": "uphill", "moved_at": "2026-05-07"},
     {"id": 5, "name": "QA Layer — cheap-signal confidence + back-translation opt-in (/qa)",                          "status": "uphill", "moved_at": "2026-05-07"},

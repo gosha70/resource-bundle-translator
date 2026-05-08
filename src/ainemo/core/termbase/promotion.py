@@ -46,15 +46,21 @@ revisit if recall is poor on real corpora.
 
 from __future__ import annotations
 
+import hashlib
+import time
 from collections import Counter
-from dataclasses import dataclass
-from typing import Final
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Final
 
 from ainemo.core.termbase._ids import (
     DEFAULT_PROMOTION_CONSISTENCY_MIN,
     DEFAULT_PROMOTION_FREQUENCY_MIN,
+    TERM_SOURCE_TM_PROMOTION,
 )
 from ainemo.core.tm.base import TranslationMemory
+
+if TYPE_CHECKING:
+    from ainemo.core.termbase.base import Termbase
 
 # Default n-gram length range (inclusive). 1..4 keeps the candidate
 # pool manageable on real TMs while covering single-word terms
@@ -89,6 +95,16 @@ class PromotionCandidate:
     """``count(suggested_target) / frequency`` in 0..1. The fraction
     of those segments that translate the n-gram to the suggested
     target. ``consistency >= min_consistency`` is the second gate."""
+
+    contributing_segment_fingerprints: tuple[str, ...] = field(default_factory=tuple)
+    """Fingerprints of the TM segments that contributed this n-gram.
+
+    Cycle-5 S2 addition: the reviewer UI samples up to 5 of these to
+    display the contributing source segments, provider/model pairs, and
+    target texts so the reviewer can judge the candidate in context.
+    Empty tuple for candidates produced by cycle-3 callers that
+    pre-date this field — backward-compatible default.
+    """
 
 
 def find_candidates(
@@ -128,7 +144,11 @@ def find_candidates(
         fp = translated.segment.fingerprint
         bucket = segment_buckets.get(fp)
         if bucket is None:
-            bucket = _SegmentBucket(source_text=translated.segment.source_text, targets=[])
+            bucket = _SegmentBucket(
+                source_text=translated.segment.source_text,
+                fingerprint=fp,
+                targets=[],
+            )
             segment_buckets[fp] = bucket
         bucket.targets.append(translated.target_text)
 
@@ -136,11 +156,15 @@ def find_candidates(
     # observation, where target = mode across that segment's
     # provider/model rows. Then aggregate across segments to get
     # per-n-gram frequency + consistency.
+    # Also record which fingerprints contribute each n-gram so the
+    # cycle-5 reviewer UI can display the contributing segments.
     observations: dict[str, list[str]] = {}
-    for bucket in segment_buckets.values():
+    fingerprints_by_ngram: dict[str, list[str]] = {}
+    for fp, bucket in segment_buckets.items():
         canonical_target = Counter(bucket.targets).most_common(1)[0][0]
         for ngram in _ngrams(bucket.source_text, n_min, n_max):
             observations.setdefault(ngram, []).append(canonical_target)
+            fingerprints_by_ngram.setdefault(ngram, []).append(fp)
 
     candidates: list[PromotionCandidate] = []
     for ngram, targets in observations.items():
@@ -160,6 +184,7 @@ def find_candidates(
                 suggested_target=suggested_target,
                 frequency=frequency,
                 consistency=consistency,
+                contributing_segment_fingerprints=tuple(fingerprints_by_ngram.get(ngram, [])),
             )
         )
 
@@ -183,7 +208,86 @@ class _SegmentBucket:
     """
 
     source_text: str
+    fingerprint: str
     targets: list[str]
+
+
+def write_accepted_candidate(tb: Termbase, candidate: PromotionCandidate) -> None:
+    """Write an accepted :class:`PromotionCandidate` into the termbase.
+
+    Extracted from ``cli/termbase_commands.py:_write_candidate`` (cycle-5 S2)
+    so both the CLI ``--review`` / ``--accept-all`` loop and the Flask
+    ``/promote/decide`` route share the same write path.
+
+    Creates one :class:`~ainemo.core.termbase.base.Concept` and two
+    :class:`~ainemo.core.termbase.base.Term` rows (one in
+    ``candidate.source_lang``, one in ``candidate.target_lang``) tagged
+    with :data:`~ainemo.core.termbase._ids.TERM_SOURCE_TM_PROMOTION`.
+
+    Idempotent: the concept_id is content-addressed via
+    :func:`_derive_promotion_concept_id`, so calling this function twice
+    with the same candidate upserts onto the same Kuzu rows rather than
+    creating duplicates. The cycle-3 stable-promote-id semantics are
+    preserved byte-for-byte.
+    """
+    from ainemo.core.termbase.base import Concept, Term
+
+    concept_id = _derive_promotion_concept_id(candidate)
+    now = int(time.time())
+    concept = Concept(
+        concept_id=concept_id,
+        qid=None,
+        definition=None,
+        created_at=now,
+    )
+    source_term = Term(
+        term_id=f"{concept_id}-{candidate.source_lang}",
+        concept_id=concept_id,
+        lang=candidate.source_lang,
+        surface=candidate.source_ngram,
+        register=None,
+        part_of_speech=None,
+        source=TERM_SOURCE_TM_PROMOTION,
+    )
+    target_term = Term(
+        term_id=f"{concept_id}-{candidate.target_lang}",
+        concept_id=concept_id,
+        lang=candidate.target_lang,
+        surface=candidate.suggested_target,
+        register=None,
+        part_of_speech=None,
+        source=TERM_SOURCE_TM_PROMOTION,
+    )
+    tb.add_concept(concept, [source_term, target_term])
+
+
+def _derive_promotion_concept_id(candidate: PromotionCandidate) -> str:
+    """Stable, content-addressed concept id for an auto-promoted candidate.
+
+    Re-running ``nemo termbase promote --accept-all`` against unchanged
+    TM data must upsert onto the same concept rather than write a
+    duplicate. The hash is over the natural key —
+    ``(source_lang, target_lang, source_ngram, suggested_target)`` —
+    joined by the ASCII unit separator (``\\x1f``) so the four fields
+    cannot collide via delimiter ambiguity. Truncated to 16 hex chars
+    (64 bits): more than enough for the cycle-3 termbase scale and
+    matches the cycle-3 S2 TBX-importer term-id pattern.
+
+    Do NOT change the hash format — on-disk concept ids are a durable
+    contract. Any format change is a migration, not a refactor.
+    Pinned by ``tests/unit/test_promotion_write_accepted_candidate.py``
+    to catch silent drift.
+    """
+    payload = "\x1f".join(
+        (
+            candidate.source_lang,
+            candidate.target_lang,
+            candidate.source_ngram,
+            candidate.suggested_target,
+        )
+    )
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return f"tm-promo-{digest[:16]}"
 
 
 def _ngrams(text: str, n_min: int, n_max: int) -> set[str]:
@@ -206,4 +310,9 @@ def _ngrams(text: str, n_min: int, n_max: int) -> set[str]:
     return out
 
 
-__all__ = ["PromotionCandidate", "find_candidates"]
+__all__ = [
+    "PromotionCandidate",
+    "find_candidates",
+    "write_accepted_candidate",
+    "_derive_promotion_concept_id",
+]

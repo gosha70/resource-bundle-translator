@@ -8,10 +8,9 @@
 
 <ul>
   <li>
-    <strong>Auto-promotion queue</strong> — review n-gram promotion candidates
-    from the translation memory and accept, reject, or edit-then-accept each
-    one into the termbase.
-    <em>(coming in S2)</em>
+    <strong><a href="{{ url_for('promote.promote_queue', source_lang='en', target_lang='de') }}">Auto-promotion queue</a></strong>
+    — review n-gram promotion candidates from the translation memory and
+    accept, reject, or edit-then-accept each one into the termbase.
   </li>
   <li>
     <strong>Import-skip queue</strong> — triage rows that were skipped during
