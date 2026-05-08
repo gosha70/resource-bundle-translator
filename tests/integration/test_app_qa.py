@@ -321,8 +321,15 @@ def test_back_translate_rejects_unknown_provider(
             },
         )
     assert resp.status_code == 400
-    body = resp.data.decode().lower()
-    assert "not-registered" in body or "unknown" in body
+    body = resp.data.decode()
+    body_lower = body.lower()
+    # The error must name the unknown provider AND list the available
+    # providers so an operator can debug a client-side dropdown desync.
+    assert "not-registered" in body_lower
+    assert "registered" in body_lower or "available" in body_lower
+    # Must NOT leak Python tracebacks or internal SDK details.
+    assert "Traceback" not in body
+    assert "providers/router.py" not in body
 
 
 def test_back_translate_records_cost_to_usage_log(
@@ -442,7 +449,16 @@ def test_back_translate_unsupported_pair_returns_400(
             },
         )
     assert resp.status_code == 400
-    assert "does not support" in resp.data.decode().lower()
+    body = resp.data.decode()
+    # Pin the operator-facing message shape: provider id + reversed pair
+    # must both appear so a future refactor of the abort message that
+    # drops one of them trips the test.
+    assert pid_strict in body
+    assert "does not support" in body.lower()
+    assert "de" in body and "en" in body, "expected reversed lang pair in error"
+    # No Python traceback / SDK leak.
+    assert "Traceback" not in body
+    assert "providers/router.py" not in body
 
 
 def test_back_translate_blank_fingerprint_rejected(

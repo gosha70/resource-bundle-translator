@@ -274,7 +274,9 @@ _PROVIDER_CHARS_PER_TOKEN: Final[Mapping[str, float]] = {
     "nllb": 2.5,
     # Helsinki-NLP OPUS-MT — SentencePiece, similar density.
     "opus": 2.5,
-    # Ollama covers many local models with very different tokenizers;
+    # Ollama default assumes Llama-family BPE (~4 chars/token).
+    # Mistral / Qwen / Yi / Phi tokenizers may differ ±20%; users running
+    # those models can pass `chars_per_token=...` per call to override.
     # 4.0 is a conservative default that errs on under-counting tokens
     # (and therefore under-estimating cost — local providers are usually
     # zero-cost anyway).
