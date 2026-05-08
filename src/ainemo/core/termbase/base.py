@@ -206,6 +206,21 @@ class ConceptEntry:
     ascending. Empty when the concept is not in any domain."""
 
 
+class _UnsetType:
+    """Sentinel type for ``update_term`` keyword args meaning *leave unchanged*.
+
+    A separate type (rather than ``object()``) so mypy can distinguish
+    "caller did not pass this kwarg" from "caller passed ``None`` to
+    clear the column". Cycle-5 S4 P2 review fix: without this, a partial
+    update like ``tb.update_term(tid, register='formal')`` would silently
+    overwrite ``surface`` with ``None`` because the Kuzu impl SET every
+    column unconditionally.
+    """
+
+
+_UNSET: _UnsetType = _UnsetType()
+
+
 @runtime_checkable
 class Termbase(Protocol):
     """Concept-oriented terminology store.
@@ -296,15 +311,47 @@ class Termbase(Protocol):
         """
         ...
 
+    def update_term(
+        self,
+        term_id: str,
+        *,
+        surface: str | _UnsetType = _UNSET,
+        register: str | None | _UnsetType = _UNSET,
+        part_of_speech: str | None | _UnsetType = _UNSET,
+    ) -> bool:
+        """Update editable fields on the Term row identified by ``term_id``.
+
+        Returns ``True`` if a row was updated, ``False`` if no row matched
+        ``term_id``.  ``term_id``, ``concept_id``, ``lang``, and ``source``
+        are immutable — cycle-5 S4 exposes only the three reviewer-edited
+        fields.  Identity changes go through delete + re-add via
+        ``add_concept``.
+
+        Each editable field defaults to the :data:`_UNSET` sentinel
+        meaning *leave the column unchanged*. Passing an explicit value
+        writes it: a non-blank string for ``surface``; a string or
+        ``None`` (clears the column) for the optional ``register`` /
+        ``part_of_speech``. ``surface`` cannot be cleared because Term
+        identity in the cycle-3 schema requires a non-empty surface;
+        a whitespace-only ``surface`` raises
+        ``ValueError("surface must be non-blank")``.
+
+        The update is a single Cypher SET statement built only from the
+        explicitly-passed fields — partial state is not possible (same
+        atomicity contract as cycle-3 ``_upsert_term``).
+        """
+        ...
+
 
 __all__ = [
     "Concept",
-    "Term",
+    "ConceptEntry",
+    "ConceptHit",
     "Domain",
     "GlossaryOverride",
     "Persona",
-    "ConceptHit",
-    "ConceptEntry",
-    "TermbaseStats",
     "Termbase",
+    "TermbaseStats",
+    "Term",
+    "_UNSET",
 ]

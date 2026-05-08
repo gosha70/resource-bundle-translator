@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import Iterator, Sequence
 
 from ainemo.core.termbase.base import (
+    _UNSET,
     Concept,
     ConceptEntry,
     ConceptHit,
@@ -27,6 +28,7 @@ from ainemo.core.termbase.base import (
     Persona,
     Term,
     TermbaseStats,
+    _UnsetType,
 )
 
 
@@ -112,6 +114,37 @@ class RecordingTermbase:
                 terms=tuple(terms),
                 domain_ids=domain_ids,
             )
+
+    def update_term(
+        self,
+        term_id: str,
+        *,
+        surface: str | _UnsetType = _UNSET,
+        register: str | None | _UnsetType = _UNSET,
+        part_of_speech: str | None | _UnsetType = _UNSET,
+    ) -> bool:
+        if not isinstance(surface, _UnsetType) and not surface.strip():
+            raise ValueError("surface must be non-blank")
+        for terms in self.terms_by_concept.values():
+            for i, t in enumerate(terms):
+                if t.term_id == term_id:
+                    from dataclasses import replace
+
+                    new_surface = t.surface if isinstance(surface, _UnsetType) else surface
+                    new_register = t.register if isinstance(register, _UnsetType) else register
+                    new_pos = (
+                        t.part_of_speech
+                        if isinstance(part_of_speech, _UnsetType)
+                        else part_of_speech
+                    )
+                    terms[i] = replace(
+                        t,
+                        surface=new_surface,
+                        register=new_register,
+                        part_of_speech=new_pos,
+                    )
+                    return True
+        return False
 
     # --- Test-only helper ---
 

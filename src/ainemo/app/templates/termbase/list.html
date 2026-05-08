@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}AI-NEMO Reviewer — Termbase{% endblock %}
+
+{% block content %}
+<h1>Termbase Curation</h1>
+
+<form method="get" action="{{ url_for('termbase.termbase_list') }}">
+  <label for="q">Search:</label>
+  <input id="q" name="q" type="text" value="{{ q }}" placeholder="source term">
+  <label for="source_lang">Source lang:</label>
+  <input id="source_lang" name="source_lang" type="text" value="{{ source_lang }}" size="5">
+  <label for="target_lang">Target lang:</label>
+  <input id="target_lang" name="target_lang" type="text" value="{{ target_lang }}" size="5">
+  <button type="submit">Search</button>
+  {% if q %}
+  <a href="{{ url_for('termbase.termbase_list') }}">Clear</a>
+  {% endif %}
+</form>
+
+<p>
+  <a href="{{ url_for('termbase.termbase_export') }}">Export TBX</a>
+</p>
+
+{% if search_performed and not has_results %}
+<p>No concepts matched <strong>{{ q }}</strong>.</p>
+{% elif not has_results %}
+<p>The termbase is empty. Import TBX or CSV/JSONL files to populate it.</p>
+{% else %}
+<p>Showing {{ entries | length }} of {{ total }} concept(s) (page {{ page }} of {{ total_pages }}).</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Concept ID</th>
+      <th>Definition</th>
+      <th>Terms</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for entry in entries %}
+    <tr>
+      <td>{{ entry.concept.concept_id }}</td>
+      <td>{{ entry.concept.definition or "" }}</td>
+      <td>
+        <table>
+          <thead>
+            <tr>
+              <th>Lang</th><th>Surface</th><th>Register</th><th>POS</th><th>Source</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for term in entry.terms %}
+            {% include "termbase/_term_row.html" %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<nav>
+  {% if page > 1 %}
+  <a href="{{ url_for('termbase.termbase_list', page=page-1, q=q, source_lang=source_lang, target_lang=target_lang) }}">&laquo; Prev</a>
+  {% endif %}
+  Page {{ page }} of {{ total_pages }}
+  {% if page < total_pages %}
+  <a href="{{ url_for('termbase.termbase_list', page=page+1, q=q, source_lang=source_lang, target_lang=target_lang) }}">Next &raquo;</a>
+  {% endif %}
+</nav>
+{% endif %}
+{% endblock %}
