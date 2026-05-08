@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}AI-NEMO Reviewer — Home{% endblock %}
+
+{% block content %}
+<h1>AI-NEMO Reviewer</h1>
+<p>Welcome to the local-first translation reviewer. Select a view below.</p>
+
+<ul>
+  <li>
+    <strong>Auto-promotion queue</strong> — review n-gram promotion candidates
+    from the translation memory and accept, reject, or edit-then-accept each
+    one into the termbase.
+    <em>(coming in S2)</em>
+  </li>
+  <li>
+    <strong>Import-skip queue</strong> — triage rows that were skipped during
+    <code>nemo termbase import-from-csv</code> / <code>import-from-jsonl</code>;
+    edit and retry each row in-place without re-editing the source file.
+    <em>(coming in S3)</em>
+  </li>
+  <li>
+    <strong>Termbase curation</strong> — list, search, and edit Concepts and
+    Terms; quick-export the termbase as TBX 3.0.
+    <em>(coming in S4)</em>
+  </li>
+  <li>
+    <strong>QA confidence</strong> — per-segment cheap-signal confidence
+    (MiniLM cosine to nearest concept, placeholder parity, length budget)
+    plus opt-in back-translation scoring.
+    <em>(coming in S5)</em>
+  </li>
+  <li>
+    <strong>Persona inspector</strong> — browse loaded personas and preview
+    the glossary block each persona would inject for a given source segment.
+    <em>(coming in S6)</em>
+  </li>
+</ul>
+{% endblock %}

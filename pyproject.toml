@@ -31,7 +31,7 @@ classifiers = [
 ]
 dependencies = [
     "transformers",
-    "flask",
+    "flask>=3.0",
     "torch",
     "sacremoses",
     "sentencepiece",
@@ -78,6 +78,12 @@ Roadmap = "https://github.com/gosha70/resource-bundle-translator/blob/main/specs
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ainemo"]
+# Hatchling includes all non-.py files inside the package tree by default.
+# The explicit artifact entry below guarantees htmx.min.js ships in the
+# wheel even if a future hatchling version changes that default.
+artifacts = [
+    "src/ainemo/app/static/htmx.min.js",
+]
 
 [tool.hatch.build.targets.sdist]
 include = [

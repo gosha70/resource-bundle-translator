@@ -18,6 +18,7 @@ import argparse
 import sys
 from typing import Sequence
 
+from ainemo.cli.app_commands import CMD_NAME_APP, register_app, run_app
 from ainemo.cli.commands import (
     CMD_NAME_PROVIDER,
     CMD_NAME_TM,
@@ -48,6 +49,7 @@ def _build_parser() -> argparse.ArgumentParser:
     register_provider(subparsers)
     register_daemon(subparsers)
     register_termbase(subparsers)
+    register_app(subparsers)
     return parser
 
 
@@ -86,6 +88,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         from ainemo.cli.termbase_commands import run_termbase
 
         return run_termbase(args)
+    if args.subcommand == CMD_NAME_APP:
+        return run_app(args)
     parser.print_help(sys.stderr)
     return 2
 
