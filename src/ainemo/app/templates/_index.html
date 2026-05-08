@@ -23,10 +23,9 @@
     — list, search, and edit Concepts and Terms; quick-export the termbase as TBX 3.0.
   </li>
   <li>
-    <strong>QA confidence</strong> — per-segment cheap-signal confidence
-    (MiniLM cosine to nearest concept, placeholder parity, length budget)
-    plus opt-in back-translation scoring.
-    <em>(coming in S5)</em>
+    <strong><a href="{{ url_for('qa.qa_confidence') }}">QA confidence</a></strong>
+    — per-segment cheap-signal confidence (MiniLM cosine to nearest concept,
+    placeholder parity, length budget) plus opt-in back-translation scoring.
   </li>
   <li>
     <strong>Persona inspector</strong> — browse loaded personas and preview

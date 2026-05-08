@@ -43,6 +43,8 @@ from ainemo.app._ids import (
     ROUTE_PROMOTE_DECIDE,
     ROUTE_PROMOTE_QUEUE,
 )
+from ainemo.app.qa.signals import ConfidenceSignals, compute_cheap_signals
+from ainemo.core.segment import Segment
 from ainemo.core.termbase.promotion import (
     PromotionCandidate,
     find_candidates,
@@ -68,13 +70,25 @@ blueprint = Blueprint("promote", __name__)
 
 @dataclass(frozen=True)
 class _SegmentPreview:
-    """One TM row shown in the contributing-segments section of a candidate."""
+    """One TM row shown in the contributing-segments section of a candidate.
+
+    Carries the full ``Segment`` (placeholders + metadata) — not just the
+    source text — so the cycle-5 S5 cheap-signal computation can score
+    against the original placeholder shape and ``max_length`` budget.
+    Reconstructing a partial Segment from text alone would silently
+    return placeholder_parity = 1.0 even when the contributing TM row
+    actually dropped a placeholder.
+    """
 
     fingerprint: str
-    source_text: str
+    segment: Segment
     provider: str
     model: str
     target_text: str
+
+    @property
+    def source_text(self) -> str:
+        return self.segment.source_text
 
 
 @dataclass(frozen=True)
@@ -84,6 +98,11 @@ class _AugmentedCandidate:
     candidate: PromotionCandidate
     segment_previews: tuple[_SegmentPreview, ...]
     existing_hits: tuple[object, ...]  # ConceptHit tuples from tb.lookup_concepts_for
+    signals: ConfidenceSignals | None
+    """Cheap-signal scores for the first contributing segment, or ``None``
+    when no contributing segment preview is available.  Picked from
+    ``segment_previews[0]`` — the first contributing fingerprint is the
+    most representative single-segment proxy for the n-gram candidate."""
 
 
 # ---------------------------------------------------------------------------
@@ -122,7 +141,7 @@ def _fetch_segment_previews(
         previews.setdefault(fp, []).append(
             _SegmentPreview(
                 fingerprint=fp,
-                source_text=translated.segment.source_text,
+                segment=translated.segment,
                 provider=translated.provider,
                 model=translated.model,
                 target_text=translated.target_text,
@@ -155,6 +174,7 @@ def _augment(
     previews = _fetch_segment_previews(tm, candidate)
 
     hits: tuple[object, ...] = ()
+    signals: ConfidenceSignals | None = None
     if isinstance(tb, Termbase):
         hits = tb.lookup_concepts_for(
             candidate.source_ngram,
@@ -162,11 +182,28 @@ def _augment(
             candidate.target_lang,
             max_hits=_MAX_EXISTING_CONCEPT_HITS,
         )
+        # Compute cheap signals from the first contributing segment preview.
+        # Use the original Segment (with placeholders + metadata) carried
+        # through _SegmentPreview rather than reconstructing one — otherwise
+        # placeholder_parity / length_budget would always show 1.0 even when
+        # the contributing TM row dropped a placeholder or exceeded max_length.
+        if previews:
+            first = previews[0]
+            try:
+                signals = compute_cheap_signals(
+                    segment=first.segment,
+                    target_text=first.target_text,
+                    target_lang=candidate.target_lang,
+                    termbase=tb,
+                )
+            except Exception:
+                signals = None
 
     return _AugmentedCandidate(
         candidate=candidate,
         segment_previews=previews,
         existing_hits=hits,
+        signals=signals,
     )
 
 

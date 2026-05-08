@@ -1,0 +1,91 @@
+<div class="qa-row" id="qa-row-{{ row.translated_fingerprint }}">
+  <table class="qa-row-detail">
+    <tr>
+      <th>Source</th>
+      <td>{{ row.source_text }}</td>
+    </tr>
+    <tr>
+      <th>Translation</th>
+      <td>{{ row.target_text }}</td>
+    </tr>
+    <tr>
+      <th>Provider</th>
+      <td>{{ row.provider }}{% if row.model %} / {{ row.model }}{% endif %}</td>
+    </tr>
+  </table>
+
+  <table class="qa-signals">
+    <thead>
+      <tr>
+        <th>Termbase cosine</th>
+        <th>Placeholder parity</th>
+        <th>Length budget</th>
+        <th>Back-translation cosine</th>
+        <th>Composite</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>{{ "%.3f" | format(row.signals.termbase_cosine) }}</td>
+        <td>{{ "%.1f" | format(row.signals.placeholder_parity) }}</td>
+        <td>{{ "%.1f" | format(row.signals.length_budget) }}</td>
+        <td>
+          {% if row.signals.back_translation_cosine is not none %}
+            {{ "%.3f" | format(row.signals.back_translation_cosine) }}
+          {% else %}
+            <em>—</em>
+          {% endif %}
+        </td>
+        <td><strong>{{ "%.3f" | format(row.signals.composite) }}</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  {% if back_translation_text is defined %}
+  <p class="qa-bt-result">
+    Back-translation: <em>{{ back_translation_text }}</em>
+  </p>
+  {% endif %}
+
+  {% if estimate_usd is defined and estimate_usd is not none %}
+  <p class="qa-estimate">Estimated cost: ${{ "%.4f" | format(estimate_usd) }} <small>(rough order of magnitude, ±50% — token/char ratios vary)</small></p>
+  {% elif estimate_usd is defined %}
+  <p class="qa-estimate"><em>No historical cost data for this provider.</em></p>
+  {% endif %}
+
+  {% if registered_providers | length >= 2 %}
+  <form
+    hx-post="{{ url_for('qa.qa_back_translate') }}"
+    hx-target="closest .qa-row"
+    hx-swap="outerHTML"
+  >
+    <input type="hidden" name="segment_fingerprint" value="{{ row.translated_fingerprint }}">
+    <input type="hidden" name="source_lang" value="{{ source_lang }}">
+    <input type="hidden" name="target_lang" value="{{ target_lang }}">
+    <label>
+      Back-translation provider:
+      <select name="provider_id">
+        {% set providers_to_render = selectable_providers if selectable_providers is defined else registered_providers %}
+        {% for pid in providers_to_render %}
+        {% if pid != row.provider %}
+        <option value="{{ pid }}">
+          {{ pid }}
+          {% if estimates_by_provider is defined %}
+            {% set est = estimates_by_provider.get(pid) %}
+            {% if est is not none %}
+              — est. ${{ "%.4f" | format(est) }}
+            {% else %}
+              — no historical cost data
+            {% endif %}
+          {% endif %}
+        </option>
+        {% endif %}
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit">Run back-translation</button>
+  </form>
+  {% else %}
+  <p class="qa-no-bt"><em>Configure a second provider in RoutingConfig to enable back-translation.</em></p>
+  {% endif %}
+</div>

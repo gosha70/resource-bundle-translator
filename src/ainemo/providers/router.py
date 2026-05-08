@@ -23,6 +23,7 @@ from dataclasses import replace as _replace
 from typing import Callable, ClassVar, Mapping
 
 from ainemo.core.segment import Segment
+from ainemo.providers._errors import UnknownProviderError
 from ainemo.providers._retry import with_retry
 from ainemo.providers._usage_log import UsageLog
 from ainemo.providers.base import Provider, ProviderResult
@@ -168,6 +169,89 @@ class ProviderRouter:
                 f"silently fall back to a different provider — fix the "
                 f"routing config or pass --provider explicitly."
             )
+        return self._invoke_provider(
+            provider,
+            segment,
+            target_lang,
+            system_prompt_addendum=system_prompt_addendum,
+        )
+
+    def translate_with(
+        self,
+        provider_id: str,
+        segment: Segment,
+        target_lang: str,
+        *,
+        system_prompt_addendum: str | None = None,
+    ) -> ProviderResult:
+        """Bypass routing config and invoke the named provider directly.
+
+        Unlike :meth:`translate`, this method does not consult
+        :class:`RoutingConfig` — the caller names the exact provider.
+        This is the cycle-5 QA-layer surface: back-translation must use
+        a *specific* provider (different from the original) regardless
+        of what the routing config would normally select.
+
+        Cost still records to :class:`UsageLog` via the same
+        :meth:`_invoke_provider` path as :meth:`translate`.
+
+        Raises
+        ------
+        UnknownProviderError
+            When ``provider_id`` is not registered in this router
+            instance.
+        ProviderUnsupportedPair
+            When the named provider does not support the
+            ``(segment.source_lang, target_lang)`` pair.
+        """
+        provider = self._providers.get(provider_id)
+        if provider is None:
+            raise UnknownProviderError(
+                f"Provider {provider_id!r} is not registered. Available: {sorted(self._providers)}."
+            )
+        if not provider.supports(segment.source_lang, target_lang):
+            raise ProviderUnsupportedPair(
+                f"Provider {provider_id!r} does not support "
+                f"({segment.source_lang!r} → {target_lang!r})."
+            )
+        return self._invoke_provider(
+            provider,
+            segment,
+            target_lang,
+            system_prompt_addendum=system_prompt_addendum,
+        )
+
+    def list_registered(self) -> tuple[str, ...]:
+        """Provider IDs the router knows about, sorted ascending.
+
+        Cycle-5 QA layer uses this to populate the back-translation
+        provider dropdown and to enforce the "must have ≥ 2 providers"
+        guard before activating the back-translation button.
+        """
+        return tuple(sorted(self._providers.keys()))
+
+    def supports(self, source_lang: str, target_lang: str) -> bool:
+        """The router supports the pair iff *some* registered provider
+        supports it (so the pipeline can ask the router this question
+        without knowing the routing rules)."""
+        return any(p.supports(source_lang, target_lang) for p in self._providers.values())
+
+    # --- Internals ---
+
+    def _invoke_provider(
+        self,
+        provider: Provider,
+        segment: Segment,
+        target_lang: str,
+        *,
+        system_prompt_addendum: str | None = None,
+    ) -> ProviderResult:
+        """Time, call, attribute, and record one provider invocation.
+
+        Shared by :meth:`translate` and :meth:`translate_with` so the
+        wall-clock measurement + attribution patch + UsageLog write happen
+        exactly once regardless of how the provider was selected.
+        """
 
         def _do_call() -> ProviderResult:
             started = time.perf_counter()
@@ -177,7 +261,7 @@ class ProviderRouter:
             # signature so test stubs and pre-Protocol-bump impls
             # stay byte-stable.
             if system_prompt_addendum is None:
-                result = provider.translate(segment, target_lang)
+                result: ProviderResult = provider.translate(segment, target_lang)
             else:
                 result = provider.translate(
                     segment,
@@ -232,14 +316,6 @@ class ProviderRouter:
         )
         return result
 
-    def supports(self, source_lang: str, target_lang: str) -> bool:
-        """The router supports the pair iff *some* registered provider
-        supports it (so the pipeline can ask the router this question
-        without knowing the routing rules)."""
-        return any(p.supports(source_lang, target_lang) for p in self._providers.values())
-
-    # --- Internals ---
-
     def _select_provider(
         self,
         *,
@@ -281,4 +357,5 @@ __all__ = [
     "ProviderUnsupportedPair",
     "RoutingConfig",
     "RoutingRule",
+    "UnknownProviderError",
 ]

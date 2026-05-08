@@ -382,6 +382,98 @@ def test_post_decide_rejects_blank_natural_key(_seeded_app: object, _kuzu_tb: Ku
     assert _kuzu_tb.stats().concept_count == 0
 
 
+def test_promote_signals_carry_segment_metadata(_kuzu_tb: KuzuTermbase, tmp_path: Path) -> None:
+    """Cycle-5 S5 P2 regression — the promote queue's confidence signals must
+    score against the *original* contributing segment, not a partial copy.
+
+    Asserts per-field round-trip (key, source_text, source_lang, placeholders,
+    metadata, fingerprint) plus per-signal correctness (placeholder_parity,
+    length_budget). A future refactor that swaps in a partial Segment will
+    fail at least one assertion regardless of which field gets dropped.
+    """
+    from ainemo.app.qa.signals import compute_cheap_signals
+    from ainemo.app.views.promote import _augment
+    from ainemo.core.segment import Placeholder, PlaceholderKind, Segment, TranslatedSegment
+
+    seg_with_meta = Segment(
+        key="k0",
+        source_text="Welcome {0}!",
+        source_lang=_SOURCE_LANG,
+        placeholders=(Placeholder(kind=PlaceholderKind.POSITIONAL, raw="{0}", span=(8, 11)),),
+        metadata={"max_length": "5"},  # tight budget — translation will exceed
+    )
+    translated = TranslatedSegment(
+        segment=seg_with_meta,
+        target_lang=_TARGET_LANG,
+        target_text="Willkommen!",  # placeholder dropped + over budget
+        provider=PROVIDER_ID_NOOP,
+        model="",
+        confidence=None,
+        source=TRANSLATION_SOURCE_PROVIDER,
+    )
+
+    class _PhTm:
+        def lookup(self, *args: object, **kwargs: object) -> None:
+            return None
+
+        def store(self, t: TranslatedSegment) -> None:
+            pass
+
+        def stats(self) -> TmStats:
+            return TmStats(
+                segment_count=1, translation_count=1, target_lang_count=1, embedding_count=0
+            )
+
+        def iter_translations(
+            self, *, source_lang: str, target_lang: str
+        ) -> Iterator[TranslatedSegment]:
+            for _ in range(_SEGMENT_COUNT):
+                yield translated
+
+    candidate = PromotionCandidate(
+        source_lang=_SOURCE_LANG,
+        target_lang=_TARGET_LANG,
+        source_ngram="Welcome",
+        suggested_target="Willkommen!",
+        frequency=_SEGMENT_COUNT,
+        consistency=1.0,
+        contributing_segment_fingerprints=tuple(
+            seg_with_meta.fingerprint for _ in range(_SEGMENT_COUNT)
+        ),
+    )
+    augmented = _augment(candidate, tm=_PhTm(), tb=_kuzu_tb)
+    assert augmented.segment_previews, "expected ≥ 1 contributing-segment preview"
+    preview = augmented.segment_previews[0]
+
+    # Per-field round-trip — each is a distinct way the partial-Segment
+    # bug could regress.
+    assert preview.segment.key == seg_with_meta.key
+    assert preview.segment.source_text == seg_with_meta.source_text
+    assert preview.segment.source_lang == seg_with_meta.source_lang
+    assert preview.segment.placeholders == seg_with_meta.placeholders
+    assert dict(preview.segment.metadata) == dict(seg_with_meta.metadata)
+    assert preview.segment.fingerprint == seg_with_meta.fingerprint
+
+    # Per-signal correctness.
+    assert augmented.signals is not None
+    assert augmented.signals.placeholder_parity == 0.0, (
+        "placeholder_parity must be 0.0 — translation dropped {0}"
+    )
+    assert augmented.signals.length_budget == 0.0, (
+        "length_budget must be 0.0 — translation exceeds max_length=5"
+    )
+
+    # Sanity: independently computed signals match what _augment produced.
+    direct = compute_cheap_signals(
+        segment=seg_with_meta,
+        target_text="Willkommen!",
+        target_lang=_TARGET_LANG,
+        termbase=_kuzu_tb,
+    )
+    assert augmented.signals.placeholder_parity == direct.placeholder_parity
+    assert augmented.signals.length_budget == direct.length_budget
+
+
 def test_post_decide_edit_requires_edited_target(
     _seeded_app: object, _kuzu_tb: KuzuTermbase
 ) -> None:
