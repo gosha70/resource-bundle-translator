@@ -74,12 +74,53 @@ class SkippedRow:
     skip details on its return value because it was a single-shot
     parse; cycle-4 sources are streaming, so skip details must travel
     through the iterator itself.
+
+    Cycle-5 S3 additive extension: four optional fields with ``None``
+    defaults let the cycle-5 ``ImportSkipStore`` preserve the original
+    row payload for retry.  Existing callers that construct
+    ``SkippedRow(reason=...)`` positionally stay byte-stable — the new
+    fields default to ``None`` and existing consumers read only
+    ``reason``.
     """
 
     reason: str
     """Human-readable line, format ``"row N: <reason>"`` (e.g.
     ``"row 12: blank source_term"``, ``"row 47: malformed JSON"``).
     Lands verbatim in :attr:`ImportReport.skipped_details`."""
+
+    row_payload: str | None = None
+    """JSON-serialised original row from the source file.
+
+    For ``CsvSource`` rows this is ``json.dumps`` of the
+    ``csv.DictReader`` row dict (including any ``None``-valued extras
+    key from over-wide rows).  For ``JsonLinesSource`` rows this is
+    the original raw line string — lossless round-trip without any
+    re-serialisation overhead, and simpler than re-encoding a parsed
+    dict.  ``None`` when the source did not populate the field (e.g.
+    cycle-4 callers that construct ``SkippedRow(reason=...)`` only).
+    """
+
+    row_index: int | None = None
+    """1-based row index matching the ``"row N:"`` prefix in
+    :attr:`reason`.  Used by :class:`~ainemo.app.store.import_skips.ImportSkipStore`
+    as a component of the content-addressed ``skip_id``.  ``None``
+    when the source did not populate the field."""
+
+    source_path: str | None = None
+    """Absolute or relative path of the source file as a plain string.
+
+    Preserved so the ``ImportSkipStore`` can group skip rows by
+    source file without access to the original ``Path`` object.
+    ``None`` when the source did not populate the field."""
+
+    source_format: str | None = None
+    """Source-file format token — ``"csv"`` or ``"jsonl"``.
+
+    Values are the :data:`~ainemo.core.termbase.sources._ids.SOURCE_FORMAT_CSV`
+    and :data:`~ainemo.core.termbase.sources._ids.SOURCE_FORMAT_JSONL`
+    constants.  The ``single_row_source`` retry factory reads this
+    field to select the correct ``TermbaseSource`` adapter.  ``None``
+    when the source did not populate the field."""
 
 
 @dataclass(frozen=True)

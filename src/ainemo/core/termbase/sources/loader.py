@@ -47,7 +47,7 @@ from __future__ import annotations
 
 import hashlib
 import time
-from typing import Final
+from typing import Any, Final
 
 from ainemo.core.termbase.base import Concept, Domain, Term, Termbase
 from ainemo.core.termbase.sources.base import (
@@ -73,6 +73,7 @@ def load_into_termbase(
     source: TermbaseSource,
     *,
     namespace: str | None = None,
+    skip_store: Any | None = None,
 ) -> ImportReport:
     """Drain ``source`` into ``tb``, returning the aggregate
     :class:`ImportReport`.
@@ -81,6 +82,19 @@ def load_into_termbase(
     consumed via the Protocol surface only; both
     :class:`KuzuTermbase` (production) and the test stub
     :class:`tests.termbase_stub.RecordingTermbase` work.
+
+    Parameters
+    ----------
+    skip_store:
+        Optional cycle-5 S3 ``ImportSkipStore`` implementation.  When
+        supplied, every :class:`SkippedRow` is also written to the store
+        (in addition to being accumulated in
+        :attr:`ImportReport.skipped_details`) so the reviewer UI can
+        triage and retry skipped rows without re-editing the source
+        file.  When ``None`` (the default), behaviour is identical to
+        cycle 4 — the print path and ``skipped_details`` are unaffected.
+        Typed ``Any`` to avoid importing the app-layer Protocol at
+        core-module import time (ports-and-adapters boundary).
     """
     concepts_added = 0
     terms_added = 0
@@ -94,6 +108,8 @@ def load_into_termbase(
         if isinstance(item, SkippedRow):
             rows_skipped += 1
             skipped_details.append(item.reason)
+            if skip_store is not None:
+                _write_to_skip_store(skip_store, item, now)
             continue
         # item is ImportRecord
         record = item
@@ -208,6 +224,50 @@ def _build_terms_for_record(record: ImportRecord, concept_id: str, provenance: s
             )
         )
     return terms
+
+
+def _write_to_skip_store(skip_store: Any, skipped: SkippedRow, now: int) -> None:
+    """Write a :class:`SkippedRow` to the cycle-5 ``ImportSkipStore``.
+
+    Called only when ``skip_store is not None``.  Late-imports the
+    store dataclass to avoid pulling the app-layer module into the
+    core import graph at module load time — the import happens inside
+    this function body so it is deferred until first use.
+
+    If ``SkippedRow`` is missing any of the four cycle-5 optional
+    fields (e.g. a cycle-4 caller that constructs ``SkippedRow(reason=…)``
+    only), this helper silently skips the store write rather than
+    raising — the byte-stability invariant means old callers must not
+    break when ``skip_store`` is accidentally passed.
+    """
+    if (
+        skipped.row_payload is None
+        or skipped.row_index is None
+        or skipped.source_path is None
+        or skipped.source_format is None
+    ):
+        return
+
+    # Deferred import — keeps core independent of the app layer at
+    # module-load time while still giving a concrete call path at
+    # runtime when the store is supplied.
+    from ainemo.app.store.import_skips import ImportSkipRow, _derive_skip_id  # noqa: PLC0415
+
+    skip_row = ImportSkipRow(
+        skip_id=_derive_skip_id(
+            source_path=skipped.source_path,
+            row_index=skipped.row_index,
+            row_payload=skipped.row_payload,
+        ),
+        source_path=skipped.source_path,
+        source_format=skipped.source_format,
+        row_index=skipped.row_index,
+        row_payload=skipped.row_payload,
+        skip_reason=skipped.reason,
+        created_at=now,
+        last_retried_at=None,
+    )
+    skip_store.add(skip_row)
 
 
 __all__ = ["load_into_termbase"]

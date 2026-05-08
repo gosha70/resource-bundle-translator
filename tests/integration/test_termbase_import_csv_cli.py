@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 
+from ainemo.app.store.import_skips import SqliteImportSkipStore
 from ainemo.cli import main as cli_main
 from ainemo.core.termbase.kuzu.store import KuzuTermbase
 
@@ -44,6 +45,7 @@ def _import_argv(
     namespace: str | None = None,
     encoding: str | None = None,
     delimiter: str | None = None,
+    import_skip_store: Path | None = None,
 ) -> list[str]:
     argv = [
         "termbase",
@@ -60,6 +62,8 @@ def _import_argv(
         argv += ["--encoding", encoding]
     if delimiter is not None:
         argv += ["--delimiter", delimiter]
+    if import_skip_store is not None:
+        argv += ["--import-skip-store", str(import_skip_store)]
     return argv
 
 
@@ -91,6 +95,39 @@ def test_import_from_csv_writes_concepts_and_prints_summary(
         assert dict(stats.term_count_by_lang) == {"de-DE": 3, "en-US": 3}
     finally:
         tb.close()
+
+
+def test_import_from_csv_persists_skipped_rows_to_store(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    csv_path = tmp_path / "g.csv"
+    map_path = tmp_path / "m.yaml"
+    tb_path = tmp_path / "tb.kuzu"
+    skip_store_path = tmp_path / "skips.sqlite"
+    _write_csv(csv_path, "term_en,term_de\n,Anmeldung\nlogin,Anmeldung\n")
+    _write_minimal_mapping(map_path)
+
+    rc = cli_main(
+        _import_argv(
+            csv_path=csv_path,
+            map_config=map_path,
+            termbase_path=tb_path,
+            import_skip_store=skip_store_path,
+        )
+    )
+
+    assert rc == 0
+    capsys.readouterr()
+    store = SqliteImportSkipStore(skip_store_path)
+    try:
+        rows = store.list()
+        assert len(rows) == 1
+        assert rows[0].source_path == str(csv_path)
+        assert rows[0].source_format == "csv"
+        assert rows[0].row_index == 2
+        assert "blank" in rows[0].skip_reason
+    finally:
+        store.close()
 
 
 def test_import_round_trips_to_termbase_stats(

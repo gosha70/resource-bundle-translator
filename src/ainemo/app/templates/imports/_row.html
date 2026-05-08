@@ -1,0 +1,35 @@
+<section class="import-skip-row" id="skip-{{ row.skip_id }}">
+  <h3>{{ row.source_format }} row {{ row.row_index }}</h3>
+  <p>
+    <strong>{{ row.source_path }}</strong><br>
+    {{ row.skip_reason }}
+    {% if row.last_retried_at %}
+      <em>Last retried: {{ row.last_retried_at }}</em>
+    {% endif %}
+    {% if status %}
+      <em>{{ status }}</em>
+    {% endif %}
+  </p>
+
+  <form
+    hx-post="{{ url_for('imports.import_replay') }}"
+    hx-target="closest .import-skip-row"
+    hx-swap="outerHTML"
+  >
+    <input type="hidden" name="skip_id" value="{{ row.skip_id }}">
+
+    <label>
+      Mapping YAML:
+      <input type="text" name="map_config" size="56" required>
+    </label>
+    <label>
+      Namespace:
+      <input type="text" name="namespace" size="18">
+    </label>
+
+    <label for="payload-{{ row.skip_id }}">Row payload:</label>
+    <textarea id="payload-{{ row.skip_id }}" name="row_payload" rows="6" cols="96">{{ row.row_payload }}</textarea>
+
+    <button type="submit">Retry</button>
+  </form>
+</section>

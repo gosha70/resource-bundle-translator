@@ -31,7 +31,7 @@ import argparse
 import logging
 import sys
 from pathlib import Path
-from typing import Final, Sequence, TextIO
+from typing import TYPE_CHECKING, Final, Sequence, TextIO
 
 from ainemo.core.termbase._ids import (
     DEFAULT_PROMOTION_CONSISTENCY_MIN,
@@ -65,6 +65,9 @@ from ainemo.core.termbase.sources.mapping import (
 from ainemo.core.termbase.tbx.exporter import TbxExporter
 from ainemo.core.termbase.tbx.importer import TbxImporter
 from ainemo.core.tm.sqlite import DEFAULT_TM_PATH, SqliteTranslationMemory
+
+if TYPE_CHECKING:
+    from ainemo.app.store.import_skips import ImportSkipStore
 
 logger = logging.getLogger(__name__)
 
@@ -238,6 +241,18 @@ def register_termbase(
             "`domain_id` overrides this flag."
         ),
     )
+    import_csv_parser.add_argument(
+        "--import-skip-store",
+        dest="import_skip_store",
+        type=Path,
+        default=None,
+        help=(
+            "Path to a SQLite import-skip store (cycle-5). When set, skipped "
+            "rows are persisted alongside the standard stdout summary so the "
+            "reviewer UI (/imports) can triage and retry them. When omitted, "
+            "behaviour is identical to cycle 4 (stdout-only skip summary)."
+        ),
+    )
     _add_termbase_path(import_csv_parser)
 
     # Cycle-4 S5 — import-from-jsonl. Same shape as
@@ -277,6 +292,16 @@ def register_termbase(
         help=(
             "Per-import namespace tag for concept-id derivation. Same "
             "semantics as `import-from-csv --namespace`."
+        ),
+    )
+    import_jsonl_parser.add_argument(
+        "--import-skip-store",
+        dest="import_skip_store",
+        type=Path,
+        default=None,
+        help=(
+            "Path to a SQLite import-skip store (cycle-5). Same semantics "
+            "as `import-from-csv --import-skip-store`."
         ),
     )
     _add_termbase_path(import_jsonl_parser)
@@ -495,10 +520,17 @@ def _run_import_from_csv(args: argparse.Namespace, *, out: TextIO, err: TextIO) 
         encoding=args.encoding,
         delimiter=delimiter,
     )
+
+    try:
+        skip_store = _open_skip_store(args.import_skip_store)
+    except Exception as exc:  # noqa: BLE001
+        err.write(f"Could not open import-skip store at {args.import_skip_store}: {exc}\n")
+        return _EXIT_USAGE
+
     tb = KuzuTermbase(args.termbase_path)
     try:
         try:
-            report = load_into_termbase(tb, source, namespace=args.namespace)
+            report = load_into_termbase(tb, source, namespace=args.namespace, skip_store=skip_store)
         except (MissingColumnError, CsvDecodeError) as exc:
             # File-level errors per the TermbaseSource contract —
             # surface them on stderr with exit 2 so the operator
@@ -507,6 +539,7 @@ def _run_import_from_csv(args: argparse.Namespace, *, out: TextIO, err: TextIO) 
             return _EXIT_USAGE
     finally:
         tb.close()
+        _close_skip_store(skip_store)
 
     out.write(
         f"Imported {report.concepts_added} concepts, "
@@ -553,15 +586,22 @@ def _run_import_from_jsonl(args: argparse.Namespace, *, out: TextIO, err: TextIO
         return _EXIT_USAGE
 
     source = JsonLinesSource(jsonl_path, mapping, encoding=args.encoding)
+    try:
+        skip_store = _open_skip_store(args.import_skip_store)
+    except Exception as exc:  # noqa: BLE001
+        err.write(f"Could not open import-skip store at {args.import_skip_store}: {exc}\n")
+        return _EXIT_USAGE
+
     tb = KuzuTermbase(args.termbase_path)
     try:
         try:
-            report = load_into_termbase(tb, source, namespace=args.namespace)
+            report = load_into_termbase(tb, source, namespace=args.namespace, skip_store=skip_store)
         except JsonlDecodeError as exc:
             err.write(f"{exc}\n")
             return _EXIT_USAGE
     finally:
         tb.close()
+        _close_skip_store(skip_store)
 
     out.write(
         f"Imported {report.concepts_added} concepts, "
@@ -663,6 +703,30 @@ def _add_termbase_path(parser: argparse.ArgumentParser) -> None:
         default=Path(DEFAULT_TERMBASE_PATH),
         help=f"Path to the Kuzu termbase directory (default: {DEFAULT_TERMBASE_PATH}).",
     )
+
+
+def _open_skip_store(path: Path | None) -> ImportSkipStore | None:
+    """Open a :class:`~ainemo.app.store.import_skips.SqliteImportSkipStore`
+    when ``path`` is not ``None``.
+
+    Returns the store on success or ``None`` when ``path`` is ``None``
+    (cycle-4 default — no store). Exceptions are intentionally left to
+    the caller so CLI runners can print the command-specific usage error.
+    """
+    if path is None:
+        return None
+    from ainemo.app.store.import_skips import SqliteImportSkipStore  # noqa: PLC0415
+
+    return SqliteImportSkipStore(path)
+
+
+def _close_skip_store(store: ImportSkipStore | None) -> None:
+    """Close the store if it has a ``close`` method.  No-op for ``None``."""
+    if store is None:
+        return
+    close = getattr(store, "close", None)
+    if callable(close):
+        close()
 
 
 __all__ = [

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}AI-NEMO Reviewer — Import Skips{% endblock %}
+
+{% block navigation %}
+{{ super() }}
+&nbsp;|&nbsp; <a href="{{ url_for('imports.import_skips') }}">Imports</a>
+{% endblock %}
+
+{% block content %}
+<h1>Import Skips</h1>
+
+<form method="get" action="{{ url_for('imports.import_skips') }}">
+  <label for="source_path">Source path:</label>
+  <input id="source_path" name="source_path" value="{{ source_path }}" size="48">
+  <button type="submit">Filter</button>
+</form>
+
+{% if not store_configured %}
+  <p>Import skip storage is not configured for this app instance.</p>
+{% elif rows %}
+  <p><strong>{{ rows | length }}</strong> skipped row(s).</p>
+  {% for row in rows %}
+    {% include "imports/_row.html" %}
+  {% endfor %}
+{% else %}
+  <p>No skipped import rows.</p>
+{% endif %}
+{% endblock %}

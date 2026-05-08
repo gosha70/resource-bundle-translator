@@ -60,6 +60,7 @@ from typing import Any, ClassVar, Iterator
 
 from ainemo.core.termbase.sources._ids import (
     DEFAULT_CSV_ENCODING,
+    SOURCE_FORMAT_JSONL,
     TERM_SOURCE_JSONL_IMPORT,
 )
 from ainemo.core.termbase.sources.base import (
@@ -140,17 +141,33 @@ class JsonLinesSource:
     # --- Internals ---
 
     def _line_to_record(self, line: str, line_no: int) -> ImportRecord | SkippedRow:
+        # ``line`` is the original raw stripped line from the file.
+        # For SkippedRow we store it verbatim as ``row_payload`` — lossless
+        # round-trip without re-serialisation, and simpler than re-encoding
+        # a parsed dict (per pitch § S3 design note).
+        source_path = str(self._path)
+
         try:
             payload = json.loads(line)
         except json.JSONDecodeError as exc:
-            return SkippedRow(reason=f"row {line_no}: malformed JSON ({exc.msg})")
+            return SkippedRow(
+                reason=f"row {line_no}: malformed JSON ({exc.msg})",
+                row_payload=line,
+                row_index=line_no,
+                source_path=source_path,
+                source_format=SOURCE_FORMAT_JSONL,
+            )
 
         if not isinstance(payload, dict):
             return SkippedRow(
                 reason=(
                     f"row {line_no}: top-level JSON value is "
                     f"{type(payload).__name__}, expected object"
-                )
+                ),
+                row_payload=line,
+                row_index=line_no,
+                source_path=source_path,
+                source_format=SOURCE_FORMAT_JSONL,
             )
 
         try:
@@ -160,11 +177,19 @@ class JsonLinesSource:
                 reason=(
                     f"row {line_no}: {self._mapping.source_column!r} "
                     f"is {exc.type_name}, expected string"
-                )
+                ),
+                row_payload=line,
+                row_index=line_no,
+                source_path=source_path,
+                source_format=SOURCE_FORMAT_JSONL,
             )
         if source_term is None:
             return SkippedRow(
-                reason=(f"row {line_no}: missing or blank {self._mapping.source_column!r} key")
+                reason=(f"row {line_no}: missing or blank {self._mapping.source_column!r} key"),
+                row_payload=line,
+                row_index=line_no,
+                source_path=source_path,
+                source_format=SOURCE_FORMAT_JSONL,
             )
 
         target_terms: list[tuple[str, str]] = []
@@ -175,7 +200,11 @@ class JsonLinesSource:
                 return SkippedRow(
                     reason=(
                         f"row {line_no}: target key {key!r} is {exc.type_name}, expected string"
-                    )
+                    ),
+                    row_payload=line,
+                    row_index=line_no,
+                    source_path=source_path,
+                    source_format=SOURCE_FORMAT_JSONL,
                 )
             if surface is not None:
                 target_terms.append((target_lang, surface))
@@ -186,7 +215,11 @@ class JsonLinesSource:
                     f"row {line_no}: no non-blank target keys "
                     f"({list(self._mapping.target_columns.values())!r} "
                     "all missing or blank)"
-                )
+                ),
+                row_payload=line,
+                row_index=line_no,
+                source_path=source_path,
+                source_format=SOURCE_FORMAT_JSONL,
             )
 
         domain_id: str | None = None
@@ -199,7 +232,11 @@ class JsonLinesSource:
                         f"row {line_no}: "
                         f"{self._mapping.domain_column!r} is "
                         f"{exc.type_name}, expected string"
-                    )
+                    ),
+                    row_payload=line,
+                    row_index=line_no,
+                    source_path=source_path,
+                    source_format=SOURCE_FORMAT_JSONL,
                 )
 
         definition: str | None = None
@@ -212,7 +249,11 @@ class JsonLinesSource:
                         f"row {line_no}: "
                         f"{self._mapping.definition_column!r} is "
                         f"{exc.type_name}, expected string"
-                    )
+                    ),
+                    row_payload=line,
+                    row_index=line_no,
+                    source_path=source_path,
+                    source_format=SOURCE_FORMAT_JSONL,
                 )
 
         return ImportRecord(

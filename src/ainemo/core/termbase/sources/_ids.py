@@ -20,6 +20,13 @@ from typing import Final
 TERM_SOURCE_CSV_IMPORT: Final = "csv-import"
 TERM_SOURCE_JSONL_IMPORT: Final = "jsonl-import"
 
+# --- Source-format tokens (cycle-5 S3) ---
+# Stored on ``SkippedRow.source_format`` so the ``ImportSkipStore``
+# and the ``single_row_source`` factory can reconstruct the correct
+# ``TermbaseSource`` adapter at retry time.
+SOURCE_FORMAT_CSV: Final = "csv"
+SOURCE_FORMAT_JSONL: Final = "jsonl"
+
 # --- CSV dialect defaults (RFC 4180) ---
 # Override-able per CLI run via `--encoding` / `--delimiter` flags.
 # No `chardet`-style auto-detection — that's a 5+ MB dep for a
@@ -42,6 +49,8 @@ MAP_KEY_DEFINITION_COLUMN: Final = "definition_column"
 __all__ = [
     "TERM_SOURCE_CSV_IMPORT",
     "TERM_SOURCE_JSONL_IMPORT",
+    "SOURCE_FORMAT_CSV",
+    "SOURCE_FORMAT_JSONL",
     "DEFAULT_CSV_DELIMITER",
     "DEFAULT_CSV_QUOTECHAR",
     "DEFAULT_CSV_ENCODING",

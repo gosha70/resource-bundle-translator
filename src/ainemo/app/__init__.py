@@ -30,7 +30,7 @@ Route registration (S1 only):
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from flask import Flask, render_template
 
@@ -42,7 +42,7 @@ from ainemo.core.tm.base import TranslationMemory
 from ainemo.providers.router import ProviderRouter
 
 if TYPE_CHECKING:
-    pass  # ImportSkipStore Protocol lands in S3; forward-typed as object below.
+    from ainemo.app.store.import_skips import ImportSkipStore
 
 _AINEMO_EXT_KEY: str = "ainemo"
 _TEMPLATE_INDEX: str = "_index.html"
@@ -56,14 +56,13 @@ class _AinemoExtensions:
     access dependencies via ``current_app.extensions["ainemo"].<field>``
     without re-importing the factory.
 
-    ``import_skips`` is typed ``object | None`` in S1; S3 narrows it to
-    ``ImportSkipStore | None`` when the Protocol is introduced.
+    ``import_skips`` is the cycle-5 S3 store behind the ``/imports`` queue.
     """
 
     termbase: Termbase
     tm: TranslationMemory
     router: ProviderRouter
-    import_skips: object | None
+    import_skips: ImportSkipStore | None
     config: AppConfig
 
 
@@ -72,7 +71,7 @@ def create_app(
     termbase: Termbase,
     tm: TranslationMemory,
     router: ProviderRouter,
-    import_skips: Any | None = None,
+    import_skips: ImportSkipStore | None = None,
     config: AppConfig | None = None,
 ) -> Flask:
     """Create and return a configured Flask app instance.
@@ -126,6 +125,9 @@ def create_app(
     from ainemo.app.views.promote import register_promote
 
     register_promote(app)
+    from ainemo.app.views.imports import register_imports
+
+    register_imports(app)
 
     return app
 
