@@ -137,6 +137,7 @@ def _run_app_run(args: argparse.Namespace, *, err: TextIO) -> int:
 
     from ainemo.app import create_app
     from ainemo.app.config import AppConfig
+    from ainemo.app.store.import_skips import SqliteImportSkipStore
     from ainemo.core.segment import Segment
     from ainemo.core.termbase.kuzu.store import KuzuTermbase
     from ainemo.core.tm.sqlite import SqliteTranslationMemory
@@ -195,6 +196,7 @@ def _run_app_run(args: argparse.Namespace, *, err: TextIO) -> int:
 
     termbase = KuzuTermbase(termbase_path)
     tm = SqliteTranslationMemory(tm_path)
+    import_skips = SqliteImportSkipStore(config.import_skips_path)
     noop: Provider = _NoOpProvider()
     router = ProviderRouter(
         providers={PROVIDER_ID_NOOP: noop},
@@ -206,9 +208,15 @@ def _run_app_run(args: argparse.Namespace, *, err: TextIO) -> int:
         termbase=termbase,
         tm=tm,
         router=router,
+        import_skips=import_skips,
         config=config,
     )
-    app.run(host=host, port=port, debug=debug)
+    try:
+        app.run(host=host, port=port, debug=debug)
+    finally:
+        termbase.close()
+        tm.close()
+        import_skips.close()
     return _EXIT_OK
 
 

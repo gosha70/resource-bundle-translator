@@ -13,10 +13,10 @@
     accept, reject, or edit-then-accept each one into the termbase.
   </li>
   <li>
-    <strong>Import-skip queue</strong> — triage rows that were skipped during
+    <strong><a href="{{ url_for('imports.import_skips') }}">Import-skip queue</a></strong>
+    — triage rows that were skipped during
     <code>nemo termbase import-from-csv</code> / <code>import-from-jsonl</code>;
     edit and retry each row in-place without re-editing the source file.
-    <em>(coming in S3)</em>
   </li>
   <li>
     <strong>Termbase curation</strong> — list, search, and edit Concepts and

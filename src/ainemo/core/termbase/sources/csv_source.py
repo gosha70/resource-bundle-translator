@@ -38,6 +38,7 @@ Design choices
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 from typing import ClassVar, Iterator, Sequence
 
@@ -45,6 +46,7 @@ from ainemo.core.termbase.sources._ids import (
     DEFAULT_CSV_DELIMITER,
     DEFAULT_CSV_ENCODING,
     DEFAULT_CSV_QUOTECHAR,
+    SOURCE_FORMAT_CSV,
     TERM_SOURCE_CSV_IMPORT,
 )
 from ainemo.core.termbase.sources.base import (
@@ -161,7 +163,13 @@ class CsvSource:
     ) -> ImportRecord | SkippedRow | None:
         source_term = _strip_or_none(row.get(self._mapping.source_column))
         if source_term is None:
-            return SkippedRow(reason=f"row {line_no}: blank {self._mapping.source_column!r} cell")
+            return SkippedRow(
+                reason=f"row {line_no}: blank {self._mapping.source_column!r} cell",
+                row_payload=_row_payload(row),
+                row_index=line_no,
+                source_path=str(self._path),
+                source_format=SOURCE_FORMAT_CSV,
+            )
 
         target_terms: list[tuple[str, str]] = []
         for target_lang, column in self._mapping.target_columns.items():
@@ -174,7 +182,11 @@ class CsvSource:
                 reason=(
                     f"row {line_no}: no non-blank target columns "
                     f"({list(self._mapping.target_columns.values())!r} all blank)"
-                )
+                ),
+                row_payload=_row_payload(row),
+                row_index=line_no,
+                source_path=str(self._path),
+                source_format=SOURCE_FORMAT_CSV,
             )
 
         domain_id: str | None = None
@@ -195,6 +207,22 @@ class CsvSource:
 
 
 # --- Module-level helpers ---
+
+
+def _row_payload(row: dict[str, str | None]) -> str:
+    """JSON-serialise a ``csv.DictReader`` row dict for storage in
+    :attr:`SkippedRow.row_payload`.
+
+    ``csv.DictReader`` may include a ``None`` key when a data row has
+    more fields than the header (the extras land under key ``None``
+    as a list).  ``json.dumps`` requires string keys, so any ``None``
+    key is converted to the literal string ``"__extras__"`` before
+    serialisation.  This is an edge case in malformed CSVs; the
+    operator fix is to clean the source file, not to round-trip the
+    extras faithfully.
+    """
+    cleaned: dict[str, object] = {(k if k is not None else "__extras__"): v for k, v in row.items()}
+    return json.dumps(cleaned, ensure_ascii=False)
 
 
 def _strip_or_none(value: str | None) -> str | None:
