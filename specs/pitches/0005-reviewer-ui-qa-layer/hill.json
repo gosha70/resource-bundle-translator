@@ -1,0 +1,14 @@
+{
+  "pitch_id": "0005-reviewer-ui-qa-layer",
+  "started_at": "2026-05-07",
+  "appetite_weeks": 6,
+  "scopes": [
+    {"id": 1, "name": "Flask app scaffolding + DI factory + nemo app run CLI",                                       "status": "uphill", "moved_at": "2026-05-07"},
+    {"id": 2, "name": "Auto-promotion candidate queue (/promote)",                                                   "status": "uphill", "moved_at": "2026-05-07"},
+    {"id": 3, "name": "Import-skip queue (/imports) + ImportSkipStore + SkippedRow payload extension",               "status": "uphill", "moved_at": "2026-05-07"},
+    {"id": 4, "name": "Termbase curation (/termbase)",                                                               "status": "uphill", "moved_at": "2026-05-07"},
+    {"id": 5, "name": "QA Layer — cheap-signal confidence + back-translation opt-in (/qa)",                          "status": "uphill", "moved_at": "2026-05-07"},
+    {"id": 6, "name": "Persona inspector (/personas)",                                                               "status": "uphill", "moved_at": "2026-05-07"},
+    {"id": 7, "name": "Documentation + cycle-5 outcomes hooks",                                                      "status": "uphill", "moved_at": "2026-05-07"}
+  ]
+}
