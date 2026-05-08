@@ -129,6 +129,10 @@ def create_app(
 
     register_imports(app)
 
+    from ainemo.app.views.termbase import register_termbase
+
+    register_termbase(app)
+
     return app
 
 

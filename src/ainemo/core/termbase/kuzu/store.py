@@ -53,6 +53,7 @@ from ainemo.core.termbase._ids import (
     REL_IN_DOMAIN,
 )
 from ainemo.core.termbase.base import (
+    _UNSET,
     Concept,
     ConceptEntry,
     ConceptHit,
@@ -61,6 +62,7 @@ from ainemo.core.termbase.base import (
     Persona,
     Term,
     TermbaseStats,
+    _UnsetType,
 )
 
 # Whitespace + punctuation chars that bound an n-gram. Used by
@@ -312,6 +314,45 @@ class KuzuTermbase:
                 terms=terms,
                 domain_ids=domain_ids,
             )
+
+    def update_term(
+        self,
+        term_id: str,
+        *,
+        surface: str | _UnsetType = _UNSET,
+        register: str | None | _UnsetType = _UNSET,
+        part_of_speech: str | None | _UnsetType = _UNSET,
+    ) -> bool:
+        set_clauses: list[str] = []
+        params: dict[str, Any] = {"tid": term_id}
+        if not isinstance(surface, _UnsetType):
+            if not surface.strip():
+                raise ValueError("surface must be non-blank")
+            set_clauses.append("t.surface = $surf")
+            set_clauses.append("t.surface_lower = $surf_lower")
+            params["surf"] = surface
+            params["surf_lower"] = surface.lower()
+        if not isinstance(register, _UnsetType):
+            set_clauses.append("t.register = $reg")
+            params["reg"] = register
+        if not isinstance(part_of_speech, _UnsetType):
+            set_clauses.append("t.part_of_speech = $pos")
+            params["pos"] = part_of_speech
+
+        if not set_clauses:
+            result = self._conn.execute(
+                f"MATCH (t:{NODE_LABEL_TERM} {{term_id: $tid}}) RETURN count(t)",
+                params,
+            )
+            return _scalar_int(result) > 0
+
+        result = self._conn.execute(
+            f"MATCH (t:{NODE_LABEL_TERM} {{term_id: $tid}}) "
+            f"SET {', '.join(set_clauses)} "
+            "RETURN count(t)",
+            params,
+        )
+        return _scalar_int(result) > 0
 
     # --- Convenience methods (not part of the Protocol but used by
     #     tests and by S6 pipeline integration; the Protocol surface

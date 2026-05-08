@@ -37,6 +37,7 @@ ROUTE_IMPORT_SKIPS: Final = "import_skips"
 ROUTE_IMPORT_REPLAY: Final = "import_replay"
 ROUTE_TERMBASE_LIST: Final = "termbase_list"
 ROUTE_TERMBASE_EDIT: Final = "termbase_edit"
+ROUTE_TERMBASE_EXPORT: Final = "termbase_export"
 ROUTE_PERSONA_LIST: Final = "persona_list"
 ROUTE_PERSONA_PREVIEW: Final = "persona_preview"
 ROUTE_QA_CONFIDENCE: Final = "qa_confidence"
@@ -107,6 +108,7 @@ __all__ = [
     "ROUTE_QA_BACK_TRANSLATE",
     "ROUTE_QA_CONFIDENCE",
     "ROUTE_TERMBASE_EDIT",
+    "ROUTE_TERMBASE_EXPORT",
     "ROUTE_TERMBASE_LIST",
     "WEIGHT_BACK_TRANSLATION_COSINE",
     "WEIGHT_LENGTH_BUDGET",

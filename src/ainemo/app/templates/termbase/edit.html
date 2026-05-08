@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}AI-NEMO Reviewer — Edit Term{% endblock %}
+
+{% block content %}
+<h1>Edit Term</h1>
+
+<dl>
+  <dt>Concept ID</dt><dd>{{ concept_id }}</dd>
+  <dt>Term ID</dt><dd>{{ term.term_id }}</dd>
+  <dt>Language</dt><dd>{{ term.lang }}</dd>
+  <dt>Source</dt><dd>{{ term.source }}</dd>
+</dl>
+
+<form method="post" action="{{ url_for('termbase.termbase_edit', concept_id=concept_id, term_id=term.term_id) }}">
+  <div>
+    <label for="surface">Surface <em>(required)</em>:</label>
+    <input id="surface" name="surface" type="text" value="{{ term.surface }}" required>
+  </div>
+  <div>
+    <label for="register">Register:</label>
+    <select id="register" name="register">
+      {% for opt in register_options %}
+      <option value="{{ opt }}" {% if term.register == opt or (not term.register and opt == "") %}selected{% endif %}>
+        {{ opt if opt else "— none —" }}
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label for="part_of_speech">Part of speech:</label>
+    <input id="part_of_speech" name="part_of_speech" type="text" value="{{ term.part_of_speech or '' }}">
+  </div>
+  <div>
+    <button type="submit">Save</button>
+    <a href="{{ url_for('termbase.termbase_list') }}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

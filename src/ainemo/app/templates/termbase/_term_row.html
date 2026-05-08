@@ -1,0 +1,10 @@
+<tr>
+  <td>{{ term.lang }}</td>
+  <td>{{ term.surface }}</td>
+  <td>{{ term.register or "" }}</td>
+  <td>{{ term.part_of_speech or "" }}</td>
+  <td>{{ term.source }}</td>
+  <td>
+    <a href="{{ url_for('termbase.termbase_edit', concept_id=entry.concept.concept_id, term_id=term.term_id) }}">Edit</a>
+  </td>
+</tr>
