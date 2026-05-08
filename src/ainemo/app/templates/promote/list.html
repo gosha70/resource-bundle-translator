@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}AI-NEMO Reviewer — Auto-promotion Queue{% endblock %}
+
+{% block navigation %}
+{{ super() }}
+&nbsp;|&nbsp; <a href="{{ url_for('promote.promote_queue') }}">Promote</a>
+{% endblock %}
+
+{% block content %}
+<h1>Auto-promotion Queue</h1>
+
+<form method="get" action="{{ url_for('promote.promote_queue') }}">
+  <label for="source_lang">Source language:</label>
+  <input id="source_lang" name="source_lang" value="{{ source_lang }}" size="8">
+  <label for="target_lang">Target language:</label>
+  <input id="target_lang" name="target_lang" value="{{ target_lang }}" size="8">
+  <button type="submit">Reload</button>
+</form>
+
+<p>
+  {% if augmented_candidates %}
+    <strong>{{ augmented_candidates | length }}</strong> candidate(s) &mdash;
+    {{ source_lang }} &rarr; {{ target_lang }}
+  {% else %}
+    No promotion candidates for <strong>{{ source_lang }} &rarr; {{ target_lang }}</strong>.
+    Try lowering the frequency or consistency thresholds via <code>nemo termbase promote</code>,
+    or select a different language pair above.
+  {% endif %}
+</p>
+
+{% for ac in augmented_candidates %}
+  {% include "promote/_row.html" %}
+{% endfor %}
+{% endblock %}

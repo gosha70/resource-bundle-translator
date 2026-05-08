@@ -28,10 +28,8 @@ The ``register_*`` / ``run_*`` split mirrors
 from __future__ import annotations
 
 import argparse
-import hashlib
 import logging
 import sys
-import time
 from pathlib import Path
 from typing import Final, Sequence, TextIO
 
@@ -39,12 +37,14 @@ from ainemo.core.termbase._ids import (
     DEFAULT_PROMOTION_CONSISTENCY_MIN,
     DEFAULT_PROMOTION_FREQUENCY_MIN,
     DEFAULT_TERMBASE_PATH,
-    TERM_SOURCE_TM_PROMOTION,
 )
-from ainemo.core.termbase.base import Concept, Term, Termbase
 from ainemo.core.termbase.kuzu.store import KuzuTermbase
 from ainemo.core.termbase.persona_loader import sync_personas_into_termbase
-from ainemo.core.termbase.promotion import PromotionCandidate, find_candidates
+from ainemo.core.termbase.promotion import (
+    PromotionCandidate,
+    find_candidates,
+    write_accepted_candidate,
+)
 from ainemo.core.termbase.sources._ids import (
     DEFAULT_CSV_DELIMITER,
     DEFAULT_CSV_ENCODING,
@@ -416,7 +416,7 @@ def _run_promote(
     tb = KuzuTermbase(args.termbase_path)
     try:
         for candidate in accepted:
-            _write_candidate(tb, candidate)
+            write_accepted_candidate(tb, candidate)
     finally:
         tb.close()
     out.write(f"Promoted {len(accepted)} candidates into the termbase.\n")
@@ -611,69 +611,7 @@ def _review_loop(
     return tuple(accepted)
 
 
-def _write_candidate(tb: Termbase, candidate: PromotionCandidate) -> None:
-    # Deterministic concept id derived from the candidate's natural
-    # key — (source_lang, target_lang, source_ngram, suggested_target).
-    # Re-running `nemo termbase promote --accept-all` against
-    # unchanged TM data must upsert onto the same concept_id rather
-    # than write a duplicate Concept + Term triple. Same content-
-    # addressed-id pattern as the cycle-3 S2 TBX importer fix.
-    concept_id = _derive_promotion_concept_id(candidate)
-    now = int(time.time())
-    concept = Concept(
-        concept_id=concept_id,
-        qid=None,
-        definition=None,
-        created_at=now,
-    )
-    source_term = Term(
-        term_id=f"{concept_id}-{candidate.source_lang}",
-        concept_id=concept_id,
-        lang=candidate.source_lang,
-        surface=candidate.source_ngram,
-        register=None,
-        part_of_speech=None,
-        source=TERM_SOURCE_TM_PROMOTION,
-    )
-    target_term = Term(
-        term_id=f"{concept_id}-{candidate.target_lang}",
-        concept_id=concept_id,
-        lang=candidate.target_lang,
-        surface=candidate.suggested_target,
-        register=None,
-        part_of_speech=None,
-        source=TERM_SOURCE_TM_PROMOTION,
-    )
-    tb.add_concept(concept, [source_term, target_term])
-
-
 # --- Helpers ---
-
-
-def _derive_promotion_concept_id(candidate: PromotionCandidate) -> str:
-    """Stable, content-addressed concept id for an auto-promoted
-    candidate.
-
-    Re-running ``nemo termbase promote --accept-all`` against
-    unchanged TM data must upsert onto the same concept rather than
-    write a duplicate. The hash is over the natural key —
-    ``(source_lang, target_lang, source_ngram, suggested_target)`` —
-    joined by the ASCII unit separator (``\\x1f``) so the four
-    fields cannot collide via delimiter ambiguity. Truncated to 16
-    hex chars (64 bits): more than enough for the cycle-3 termbase
-    scale and matches the cycle-3 S2 TBX-importer term-id pattern.
-    """
-    payload = "\x1f".join(
-        (
-            candidate.source_lang,
-            candidate.target_lang,
-            candidate.source_ngram,
-            candidate.suggested_target,
-        )
-    )
-    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
-    return f"tm-promo-{digest[:16]}"
-
 
 _DELIMITER_ESCAPES: Final = {
     "\\t": "\t",
