@@ -499,34 +499,30 @@ class DaemonServer:
         target_lang: str,
     ) -> str | None:
         """Build the system-prompt addendum for a single-segment
-        ``translate`` op. Mirrors
-        :meth:`TranslationPipeline._build_system_prompt_addendum`
-        in shape — same persona prompt + termbase glossary
-        composition — but operates on a single Segment without
-        going through the pipeline's TM-miss gate.
+        ``translate`` op via the cycle-5 S6 shared builder.
+
+        Cycle-5 S6 extracted the persona-prompt + termbase-glossary
+        composition into :func:`build_glossary_block` so the daemon,
+        the pipeline, and the reviewer UI all use one implementation.
         """
         persona, termbase = self._resolve_persona(params)
         if persona is None:
+            # Daemon contract (cycle-3 S6): persona is mandatory here.
+            # The pipeline path is optional-persona — build_glossary_block
+            # composes from a termbase alone when persona is None. Do NOT
+            # lift this guard into build_glossary_block "for consistency";
+            # it would silently broaden daemon behavior. Cycle-5 S6 retro
+            # nit, preserved across the shared-helper extraction.
             return None
-        # Local import keeps the cycle-3 deps out of import-time.
-        from ainemo.core.pipeline import _format_glossary_block
+        from ainemo.core.termbase.glossary import build_glossary_block
 
-        sections: list[str] = []
-        if persona.prompt_addendum.strip():
-            sections.append(persona.prompt_addendum.strip())
-        if termbase is not None:
-            hits = termbase.lookup_concepts_for(
-                segment.source_text,
-                segment.source_lang,
-                target_lang,
-                domain_id=persona.domain_id,
-            )
-            block = _format_glossary_block(hits, target_lang)
-            if block:
-                sections.append(block)
-        if not sections:
-            return None
-        return "\n\n".join(sections)
+        return build_glossary_block(
+            termbase,
+            persona,
+            source_text=segment.source_text,
+            source_lang=segment.source_lang,
+            target_lang=target_lang,
+        )
 
 
 # --- Helpers --------------------------------------------------------------

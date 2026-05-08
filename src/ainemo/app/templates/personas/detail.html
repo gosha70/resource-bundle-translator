@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}AI-NEMO Reviewer — Persona {{ persona.persona_id }}{% endblock %}
+
+{% block content %}
+<p><a href="{{ url_for('personas.persona_list') }}">&larr; All personas</a></p>
+
+<h1>{{ persona.name }} <small>({{ persona.persona_id }})</small></h1>
+
+<table class="persona-detail">
+  <tr><th>persona_id</th><td>{{ persona.persona_id }}</td></tr>
+  <tr><th>Name</th><td>{{ persona.name }}</td></tr>
+  <tr><th>Domain</th><td>{{ persona.domain_id or '—' }}</td></tr>
+  <tr><th>Register</th><td>{{ persona.register or '—' }}</td></tr>
+  {% if persona.style_guide_url %}
+  <tr><th>Style guide</th><td><a href="{{ persona.style_guide_url }}">{{ persona.style_guide_url }}</a></td></tr>
+  {% endif %}
+</table>
+
+<h2>Prompt addendum</h2>
+{% if persona.prompt_addendum %}
+<pre class="persona-addendum">{{ persona.prompt_addendum }}</pre>
+{% else %}
+<p><em>(empty)</em></p>
+{% endif %}
+
+{% if persona.forbidden_terms %}
+<h2>Forbidden terms ({{ persona.forbidden_terms | length }})</h2>
+<ul>
+  {% for term in persona.forbidden_terms %}
+  <li><code>{{ term }}</code></li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<h2>Preview hits</h2>
+<p>Paste a candidate source segment to see the system-prompt addendum
+this persona's domain filter would inject — byte-identical to what the
+translation pipeline produces.</p>
+
+<form
+  hx-post="{{ url_for('personas.persona_preview', persona_id=persona.persona_id) }}"
+  hx-target="#preview-result"
+  hx-swap="innerHTML"
+>
+  <p>
+    <label>Source text:<br>
+      <textarea name="source_text" rows="3" cols="80" required></textarea>
+    </label>
+  </p>
+  <p>
+    <label>Source lang: <input type="text" name="source_lang" value="{{ default_source_lang }}" size="8"></label>
+    <label>Target lang: <input type="text" name="target_lang" value="{{ default_target_lang }}" size="8"></label>
+  </p>
+  <p><button type="submit">Preview glossary block</button></p>
+</form>
+
+<div id="preview-result"></div>
+{% endblock %}

@@ -29,10 +29,10 @@ from ainemo.core.segment import (
     TranslatedSegment,
 )
 from ainemo.core.termbase.base import (
-    ConceptHit,
     Persona,
     Termbase,
 )
+from ainemo.core.termbase.glossary import build_glossary_block
 from ainemo.core.tm.base import (
     DEFAULT_FUZZY_THRESHOLD,
     TM_MATCH_TYPE_EXACT,
@@ -298,78 +298,25 @@ class TranslationPipeline:
     def _build_system_prompt_addendum(self, segment: Segment, target_lang: str) -> str | None:
         """Compose the persona prompt + termbase glossary block.
 
-        Returns ``None`` when neither a termbase nor a persona is
-        configured (cycle-1+2 path stays byte-stable). Otherwise
-        concatenates:
-
-        - The persona's ``prompt_addendum`` (free text), if any.
-        - A glossary block of termbase concept hits for this segment,
-          formatted as ``- "source" → "target"`` lines, if any.
-
-        Both halves are optional — a configured persona with no
-        termbase still contributes the prompt addendum; a configured
-        termbase with no persona contributes only the glossary block.
+        Thin delegation to :func:`~ainemo.core.termbase.glossary.build_glossary_block`
+        so the pipeline and the cycle-5 persona inspector UI share one
+        implementation.  Semantics are byte-identical to the pre-cycle-5
+        private implementation — the cycle-3 S6 integration test asserts
+        exact string values and must pass unchanged.
         """
-        if self._termbase is None and self._persona is None:
-            return None
-        sections: list[str] = []
-        if self._persona is not None and self._persona.prompt_addendum.strip():
-            sections.append(self._persona.prompt_addendum.strip())
-        if self._termbase is not None:
-            domain_id = self._persona.domain_id if self._persona is not None else None
-            hits = self._termbase.lookup_concepts_for(
-                segment.source_text,
-                segment.source_lang,
-                target_lang,
-                domain_id=domain_id,
-            )
-            block = _format_glossary_block(hits, target_lang)
-            if block:
-                sections.append(block)
-        if not sections:
-            return None
-        return "\n\n".join(sections)
+        return build_glossary_block(
+            self._termbase,
+            self._persona,
+            source_text=segment.source_text,
+            source_lang=segment.source_lang,
+            target_lang=target_lang,
+        )
 
     def _is_blocking(self, violation: Violation) -> bool:
         if violation.severity == VIOLATION_SEVERITY_ERROR:
             return True
         # In strict mode, warnings escalate to blocking.
         return self._strict
-
-
-_GLOSSARY_HEADER = "Glossary (apply to the segment if relevant):"
-
-
-def _format_glossary_block(hits: tuple[ConceptHit, ...], target_lang: str) -> str | None:
-    """Format ``ConceptHit`` rows into a system-prompt glossary block.
-
-    Returns ``None`` when there are no hits or no hit has a target-lang
-    term — an empty block is worse than no block (it tells the model a
-    glossary applies and then provides nothing). Hits with no
-    target-lang term are skipped silently; the cycle-5 reviewer UI
-    surfaces them through a different channel
-    (:class:`ConceptHit.target_terms` is empty for those).
-
-    Format:
-
-        Glossary (apply to the segment if relevant):
-        - "login" → "Anmeldung"
-        - "logout" → "Abmeldung"
-
-    Each entry uses the matched source term and the *first* available
-    target-lang term — the termbase Protocol contract sorts terms by
-    ``(lang, surface, term_id)`` so the choice is deterministic.
-    """
-    lines: list[str] = []
-    for hit in hits:
-        if not hit.target_terms:
-            continue
-        target_surface = hit.target_terms[0].surface
-        source_surface = hit.matched_source_term.surface
-        lines.append(f'- "{source_surface}" → "{target_surface}"')
-    if not lines:
-        return None
-    return "\n".join([_GLOSSARY_HEADER, *lines])
 
 
 _LOCALE_SUFFIX_PATTERN = re.compile(r"_(?:[a-z]{2,3})(?:_[A-Za-z][A-Za-z0-9]{1,3})?$")
