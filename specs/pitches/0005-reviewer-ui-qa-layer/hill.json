@@ -10,6 +10,6 @@
     {"id": 4, "name": "Termbase curation (/termbase)",                                                               "status": "done",     "moved_at": "2026-05-08", "last_updated": "2026-05-08T00:00:00Z"},
     {"id": 5, "name": "QA Layer — cheap-signal confidence + back-translation opt-in (/qa)",                          "status": "done",   "moved_at": "2026-05-08", "last_updated": "2026-05-08T00:00:00Z"},
     {"id": 6, "name": "Persona inspector (/personas)",                                                               "status": "done",   "moved_at": "2026-05-08", "last_updated": "2026-05-08T01:00:00Z"},
-    {"id": 7, "name": "Documentation + cycle-5 outcomes hooks",                                                      "status": "uphill", "moved_at": "2026-05-07"}
+    {"id": 7, "name": "Documentation + cycle-5 outcomes hooks",                                                      "status": "done",   "moved_at": "2026-05-08", "last_updated": "2026-05-08T02:00:00Z"}
   ]
 }

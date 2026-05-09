@@ -2,7 +2,7 @@
 
 **Networked Engine for Multilingual Ontologies** — knowledge-graph-grounded terminology and localization for software, with versioned domain packs and CC0/CC-BY ontology integrations. Distributed under the **egoge.com** namespace alongside [AI-ATLAS](https://github.com/gosha70/ai-atlas).
 
-> **Status**: pre-release. Cycles 0–3 **shipped**, cycle 4 **closing**. Cycle 0 (rebrand & stabilize) shipped 2026-05-03 — see the [retrospective](specs/retros/cycle-0.md). Cycle 1 (foundation: adapters + translation memory + validators) shipped 2026-05-03 — four bundle adapters, SQLite TM with embedding-based fuzzy lookup, four validators, end-to-end pipeline, and the `nemo` CLI. Cycle 2 (provider abstraction + Gradle plugin) shipped 2026-05-05 — `Provider` Protocol with NLLB / OPUS / OpenAI / **Anthropic Claude** / **Ollama** backends behind a cost/latency-tracked `ProviderRouter`, `~/.ainemo/usage.jsonl` UsageLog, `nemo daemon` JSON-over-stdio IPC, and the `com.egoge.ai.nemo.translate` Gradle plugin — see the [retrospective](specs/retros/cycle-2.md) and the [post-cycle cooldown report](specs/retros/cooldown-after-02.md). Cycle 3 (concept-oriented termbase via Kuzu) shipped 2026-05-06 — `Termbase` Protocol with `KuzuTermbase` backend, TBX 3.0 import/export with byte-stable output, persona system with three starter packs, TM auto-promotion algorithm, and the `nemo termbase` CLI family; see the [retrospective](specs/retros/cycle-3.md) and the [post-cycle cooldown report](specs/retros/cooldown-after-03.md). Cycle 4 (pluggable termbase importer pipeline) is closing on 2026-05-07 — `TermbaseSource` Protocol with `CsvSource` and `JsonLinesSource` backends, YAML-driven `FieldMapping`, and `nemo termbase import-from-csv` / `import-from-jsonl` CLIs (see [`docs/importers.md`](docs/importers.md)); cooldown retro pending. See [`specs/ROADMAP.md`](specs/ROADMAP.md) for the full plan and [`specs/pitches/`](specs/pitches/) for individual cycles.
+> **Status**: pre-release. Cycles 0–4 **shipped**, cycle 5 **closing**. Cycle 0 (rebrand & stabilize) shipped 2026-05-03 — see the [retrospective](specs/retros/cycle-0.md). Cycle 1 (foundation: adapters + translation memory + validators) shipped 2026-05-03. Cycle 2 (provider abstraction + Gradle plugin) shipped 2026-05-05 — `Provider` Protocol + NLLB / OPUS / OpenAI / Anthropic / Ollama backends + `ProviderRouter` + UsageLog + Gradle plugin (see [retro](specs/retros/cycle-2.md), [cooldown](specs/retros/cooldown-after-02.md)). Cycle 3 (concept-oriented termbase via Kuzu) shipped 2026-05-06 — `Termbase` Protocol + `KuzuTermbase` + TBX 3.0 round-trip + persona system + TM auto-promotion + `nemo termbase` CLI (see [retro](specs/retros/cycle-3.md), [cooldown](specs/retros/cooldown-after-03.md)). Cycle 4 (pluggable termbase importer pipeline) shipped 2026-05-07 — `TermbaseSource` Protocol + `CsvSource` + `JsonLinesSource` + `nemo termbase import-from-csv` / `import-from-jsonl` (see [cooldown](specs/retros/cooldown-after-04.md), [`docs/importers.md`](docs/importers.md)). Cycle 5 (reviewer web UI + QA layer) is closing on 2026-05-08 — Flask app under `src/ainemo/app/` with five views (`/promote`, `/imports`, `/termbase`, `/qa`, `/personas`), HTMX-driven with vendored static assets, `ImportSkipStore` + `Termbase.update_term` + `ProviderRouter.translate_with` + `UsageLog.estimate_for` + `build_glossary_block` as additive Protocol additions, `nemo app run` CLI; cooldown retro pending. See [`specs/ROADMAP.md`](specs/ROADMAP.md) for the full plan and [`specs/pitches/`](specs/pitches/) for individual cycles.
 
 ## What this is
 
@@ -79,6 +79,11 @@ nemo termbase stats
 # team's glossary" below + docs/importers.md for the YAML schema).
 nemo termbase import-from-csv path/to/glossary.csv --map-config mapping.yaml
 nemo termbase import-from-jsonl path/to/dump.jsonl --map-config mapping.yaml
+
+# Cycle-5 — start the reviewer + admin web app on localhost (single-user
+# default; see docs/reviewer-ui.md for the full tour).
+nemo app run [--host 127.0.0.1] [--port 5050] [--debug] \
+             [--termbase-path .ainemo/termbase.kuzu] [--tm-path .ainemo/tm.sqlite]
 ```
 
 `nemo translate` infers the bundle format from the source path's extension; pass `--format` to override. See [`docs/adapters.md`](docs/adapters.md) for the format → adapter table and [`docs/providers.md`](docs/providers.md) for per-provider prereqs, default models, env vars (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OLLAMA_HOST`), and cost tracking.
@@ -206,6 +211,31 @@ Re-running an import with unchanged source data + unchanged `--namespace` is byt
 
 See [`docs/importers.md`](docs/importers.md) for the full `FieldMapping` schema, the `TermbaseSource` Protocol, error surfaces, and the idempotency / namespace-collision contracts.
 
+## Reviewer UI
+
+Cycle 5 ships AI-NEMO's **reviewer + admin web app** — a Flask surface for triaging auto-promotion candidates, retrying skipped imports, curating the termbase, inspecting persona behavior, and scoring per-segment confidence.
+
+```bash
+# Start the reviewer app on localhost (defaults: 127.0.0.1:5050).
+nemo app run
+```
+
+The five views the reviewer can reach:
+
+| View | URL | Purpose |
+|---|---|---|
+| `/promote` | Auto-promotion queue — accept / reject / edit-then-accept TM-derived `PromotionCandidate` rows; replaces the cycle-3 `--review` stdin loop. |
+| `/imports` | Import-skip queue — retry rows that `import-from-csv` / `-jsonl` skipped, with optional in-place edits. |
+| `/termbase` | Concept / term curation — list, search, edit, quick TBX 3.0 export. |
+| `/qa` | QA layer — per-segment cheap signals (termbase cosine + placeholder parity + length budget) and opt-in back-translation. |
+| `/personas` | Read-only persona inspector with a glossary-block preview that's byte-equivalent to the pipeline's system-prompt addendum. |
+
+**Local-first.** HTMX is vendored at `src/ainemo/app/static/htmx.min.js` (no CDN). Single-user-localhost by default — no auth, no telemetry, no phone-home. Multi-user / basic-auth deferred to a later cycle. CSRF wiring lands alongside that auth surface.
+
+The UI is **additive** — every CLI surface keeps working unchanged. UI writes go through the same `Termbase` / `TranslationMemory` / `ProviderRouter` / `ImportSkipStore` Protocols the CLI uses, so a candidate accepted via `nemo termbase promote --review` and the same candidate accepted via the UI produce byte-identical termbase rows.
+
+See [`docs/reviewer-ui.md`](docs/reviewer-ui.md) for the full view-by-view tour, security model, and architecture; [`docs/qa-layer.md`](docs/qa-layer.md) for confidence-signal weights, back-translation procedure, and the cost-trade-off framing.
+
 ## Development
 
 ```bash
@@ -262,9 +292,10 @@ Development cadence is documented in [`specs/README.md`](specs/README.md). Each 
 | 1 | [Foundation: Adapters + TM + Validators](specs/pitches/0001-foundation/pitch.md) | shipped — adapters + TM + validators + pipeline + CLI all in `src/ainemo/core/` |
 | 2 | [Provider Abstraction + Gradle Plugin](specs/pitches/0002-providers-gradle/pitch.md) | shipped — see [retro](specs/retros/cycle-2.md) and [cooldown report](specs/retros/cooldown-after-02.md) |
 | 3 | [Concept-Oriented Termbase via Kuzu](specs/pitches/0003-kuzu-termbase/pitch.md) | shipped — see [retro](specs/retros/cycle-3.md) and [cooldown report](specs/retros/cooldown-after-03.md) |
-| 4 | [Pluggable Termbase Importer Pipeline](specs/pitches/0004-termbase-importer-pipeline/pitch.md) | closing — all six scopes done; cooldown retro pending |
+| 4 | [Pluggable Termbase Importer Pipeline](specs/pitches/0004-termbase-importer-pipeline/pitch.md) | shipped — see [cooldown report](specs/retros/cooldown-after-04.md) |
+| 5 | [Reviewer Web UI + QA Layer](specs/pitches/0005-reviewer-ui-qa-layer/pitch.md) | closing — all seven scopes done; cooldown retro pending |
 
-Future cycles (Kuzu termbase, domain packs, reviewer UI, multi-platform expansion) are sketched in [`specs/ROADMAP.md`](specs/ROADMAP.md) but re-shaped before each betting table.
+Future cycles (multi-platform expansion — Maven plugin, npm/Vite plugin, `.xcstrings` and Fluent adapters; pre-built domain packs; further reviewer-UI hardening like multi-user auth + CSRF) are sketched in [`specs/ROADMAP.md`](specs/ROADMAP.md) but re-shaped before each betting table.
 
 ## License
 
