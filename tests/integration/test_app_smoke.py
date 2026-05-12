@@ -22,7 +22,7 @@ from typing import ClassVar
 import pytest
 
 from ainemo.app import create_app
-from ainemo.app._ids import HTMX_VENDORED_SHA256, ROUTE_INDEX
+from ainemo.app._ids import HTMX_VENDORED_SHA256, PICO_VENDORED_SHA256, ROUTE_INDEX
 from ainemo.app.config import AppConfig
 from ainemo.core.segment import Segment
 from ainemo.core.termbase.kuzu.store import KuzuTermbase
@@ -160,6 +160,38 @@ def test_get_static_htmx_returns_200_and_matches_sha256(_deps):  # type: ignore[
         f"got {actual_sha256!r}. "
         "Did someone replace the vendored file with a CDN link?"
     )
+
+
+def test_get_static_pico_returns_200_and_matches_sha256(_deps):  # type: ignore[no-untyped-def]
+    """GET /static/pico.min.css must be served by Flask (not redirected
+    to a CDN) and its sha256 must equal PICO_VENDORED_SHA256 declared
+    in _ids.py. Mirrors the no-CDN regression for the HTMX bundle.
+    """
+    termbase, tm, router = _deps
+    app = create_app(termbase=termbase, tm=tm, router=router)
+    with app.test_client() as client:
+        resp = client.get("/static/pico.min.css")
+    assert resp.status_code == 200
+    actual_sha256 = hashlib.sha256(resp.data).hexdigest()
+    assert actual_sha256 == PICO_VENDORED_SHA256, (
+        f"pico.min.css sha256 mismatch — expected {PICO_VENDORED_SHA256!r}, "
+        f"got {actual_sha256!r}. "
+        "Did someone replace the vendored file with a CDN link?"
+    )
+
+
+def test_landing_page_loads_pico_from_same_origin(_deps):  # type: ignore[no-untyped-def]
+    """The rendered base.html must reference the local /static/pico.min.css,
+    NOT a picocss.com / unpkg / jsdelivr CDN URL."""
+    termbase, tm, router = _deps
+    app = create_app(termbase=termbase, tm=tm, router=router)
+    with app.test_client() as client:
+        resp = client.get("/")
+    body = resp.data.decode("utf-8")
+    assert "pico.min.css" in body, "base.html must reference pico.min.css"
+    assert "picocss.com" not in body, "base.html must NOT reference picocss.com CDN"
+    assert "unpkg.com" not in body, "base.html must NOT reference unpkg.com CDN"
+    assert "cdn.jsdelivr.net" not in body, "base.html must NOT reference jsdelivr CDN"
 
 
 def test_nemo_app_run_help_exits_zero() -> None:

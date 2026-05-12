@@ -218,6 +218,47 @@ def test_get_promote_empty_tm_returns_200_with_empty_message(_empty_app: object)
     assert "No promotion candidates" in body
 
 
+def test_get_promote_threshold_query_params(_seeded_app: object) -> None:
+    """Cycle-5 cooldown polish — `?min_frequency=` and `?min_consistency=`
+    are honored and surfaced in the rendered form.
+
+    Seeded TM has 5 segments containing _NGRAM. At min_frequency=10 the
+    queue should be empty; at min_frequency=2 it must include _NGRAM.
+    """
+    from flask import Flask
+
+    assert isinstance(_seeded_app, Flask)
+    with _seeded_app.test_client() as client:
+        # Threshold too high → empty queue.
+        resp_strict = client.get(
+            f"/promote?source_lang={_SOURCE_LANG}&target_lang={_TARGET_LANG}&min_frequency=100"
+        )
+        # Threshold loose → at least one candidate (login appears 5x).
+        resp_loose = client.get(
+            f"/promote?source_lang={_SOURCE_LANG}&target_lang={_TARGET_LANG}&min_frequency=2"
+        )
+    assert resp_strict.status_code == 200
+    assert "No promotion candidates" in resp_strict.data.decode()
+    assert resp_loose.status_code == 200
+    assert _NGRAM in resp_loose.data.decode()
+
+
+def test_get_promote_empty_state_renders_threshold_inputs(_empty_app: object) -> None:
+    """Cycle-5 cooldown polish — the empty-state must render the min
+    frequency / min consistency input fields so the operator can tune
+    interactively without leaving the page."""
+    from flask import Flask
+
+    assert isinstance(_empty_app, Flask)
+    with _empty_app.test_client() as client:
+        resp = client.get(f"/promote?source_lang={_SOURCE_LANG}&target_lang={_TARGET_LANG}")
+    assert resp.status_code == 200
+    body = resp.data.decode()
+    assert "No promotion candidates" in body
+    assert 'name="min_frequency"' in body
+    assert 'name="min_consistency"' in body
+
+
 def test_post_accept_writes_concept_and_terms(_seeded_app: object, _kuzu_tb: KuzuTermbase) -> None:
     """POST accept writes exactly one Concept + 2 Terms with tm-promotion source
     and a stable ``tm-promo-<sha256[:16]>`` concept id."""

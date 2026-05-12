@@ -4,26 +4,32 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}AI-NEMO Reviewer{% endblock %}</title>
-  <!-- HTMX is vendored locally — no CDN, no phone-home (local-first per CLAUDE.md). -->
+  {# Pico.css and HTMX both vendored locally — no CDN, no phone-home (local-first per CLAUDE.md). #}
+  <link rel="stylesheet" href="{{ url_for('static', filename='pico.min.css') }}">
   <script src="{{ url_for('static', filename='htmx.min.js') }}" defer></script>
   {% block head %}{% endblock %}
 </head>
 <body>
-  <header>
-    <nav>
-      {% block navigation %}
-      <a href="{{ url_for('index') }}">Home</a>
-      {# S2–S6 extend this block with their own nav links. #}
-      {% endblock %}
-    </nav>
-  </header>
+  <main class="container">
+    <header>
+      <nav>
+        <ul>
+          <li><strong>AI-NEMO Reviewer</strong></li>
+        </ul>
+        {% block navigation %}
+        <ul>
+          <li><a href="{{ url_for('index') }}">Home</a></li>
+        </ul>
+        {# S2–S6 extend this block with their own nav links. #}
+        {% endblock %}
+      </nav>
+    </header>
 
-  <main>
     {% block content %}{% endblock %}
-  </main>
 
-  <footer>
-    <small>AI-NEMO — local-first localization reviewer</small>
-  </footer>
+    <footer>
+      <small>AI-NEMO — local-first localization reviewer</small>
+    </footer>
+  </main>
 </body>
 </html>

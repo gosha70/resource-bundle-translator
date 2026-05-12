@@ -4,30 +4,59 @@
 
 {% block navigation %}
 {{ super() }}
-&nbsp;|&nbsp; <a href="{{ url_for('promote.promote_queue') }}">Promote</a>
+<li><a href="{{ url_for('promote.promote_queue') }}">Promote</a></li>
 {% endblock %}
 
 {% block content %}
 <h1>Auto-promotion Queue</h1>
 
 <form method="get" action="{{ url_for('promote.promote_queue') }}">
-  <label for="source_lang">Source language:</label>
-  <input id="source_lang" name="source_lang" value="{{ source_lang }}" size="8">
-  <label for="target_lang">Target language:</label>
-  <input id="target_lang" name="target_lang" value="{{ target_lang }}" size="8">
+  <div class="grid">
+    <label>Source language
+      <input name="source_lang" value="{{ source_lang }}">
+    </label>
+    <label>Target language
+      <input name="target_lang" value="{{ target_lang }}">
+    </label>
+    <label>Min frequency
+      <input type="number" name="min_frequency" value="{{ min_frequency }}" min="1">
+    </label>
+    <label>Min consistency
+      <input type="number" name="min_consistency" value="{{ min_consistency }}" min="0" max="1" step="0.05">
+    </label>
+  </div>
   <button type="submit">Reload</button>
 </form>
 
-<p>
-  {% if augmented_candidates %}
-    <strong>{{ augmented_candidates | length }}</strong> candidate(s) &mdash;
-    {{ source_lang }} &rarr; {{ target_lang }}
-  {% else %}
-    No promotion candidates for <strong>{{ source_lang }} &rarr; {{ target_lang }}</strong>.
-    Try lowering the frequency or consistency thresholds via <code>nemo termbase promote</code>,
-    or select a different language pair above.
-  {% endif %}
-</p>
+{% if augmented_candidates %}
+  <p>
+    <strong>{{ augmented_candidates | length }}</strong> candidate(s) for
+    <strong>{{ source_lang }} &rarr; {{ target_lang }}</strong>
+    at frequency &ge; {{ min_frequency }}, consistency &ge; {{ min_consistency }}.
+  </p>
+{% else %}
+  <article>
+    <header>
+      <strong>No promotion candidates</strong> for {{ source_lang }} &rarr; {{ target_lang }}
+      at frequency &ge; {{ min_frequency }}, consistency &ge; {{ min_consistency }}.
+    </header>
+    <p>Try:</p>
+    <ul>
+      <li>Lower the <strong>min frequency</strong> or <strong>min consistency</strong> above and reload.</li>
+      {% if available_pairs %}
+      <li>
+        Switch to a language pair that has TM data —
+        currently:
+        {% for s, t in available_pairs %}
+          <a href="{{ url_for('promote.promote_queue', source_lang=s, target_lang=t) }}"><code>{{ s }} &rarr; {{ t }}</code></a>{% if not loop.last %},{% endif %}
+        {% endfor %}.
+        (The TM may store <code>en-US</code> rather than <code>en</code> if your bundle filename includes a locale suffix — e.g. <code>messages_en.properties</code> infers <code>en-US</code>.)
+      </li>
+      {% endif %}
+      <li>Run <code>nemo translate</code> against more source segments — the algorithm needs ≥ {{ min_frequency }} distinct segments sharing the same full-sentence target.</li>
+    </ul>
+  </article>
+{% endif %}
 
 {% for ac in augmented_candidates %}
   {% include "promote/_row.html" %}

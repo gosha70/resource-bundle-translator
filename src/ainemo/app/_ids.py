@@ -83,6 +83,17 @@ HTMX_VENDORED_VERSION: Final = "2.0.4"
 HTMX_VENDORED_SHA256: Final = "e209dda5c8235479f3166defc7750e1dbcd5a5c1808b7792fc2e6733768fb447"
 
 # ---------------------------------------------------------------------------
+# Vendored Pico.css (cycle-5 cooldown polish — same audience, personal-taste
+# improvement at single-user-localhost scope; no Node toolchain rule
+# preserved). Classless framework — zero template edits required to apply.
+# Version: 2.1.1  Source: https://github.com/picocss/pico/releases
+# SHA-256 covers the exact bytes in src/ainemo/app/static/pico.min.css.
+# ---------------------------------------------------------------------------
+
+PICO_VENDORED_VERSION: Final = "2.1.1"
+PICO_VENDORED_SHA256: Final = "fbc9a63fc9fc9f72d12fd7fc9806e11fa9f77ae4f9cad146b27003a1119ba3db"
+
+# ---------------------------------------------------------------------------
 # Flask server defaults (single-user-localhost; pre-resolved Q3).
 # ---------------------------------------------------------------------------
 
@@ -99,6 +110,8 @@ __all__ = [
     "DEFAULT_PORT",
     "HTMX_VENDORED_SHA256",
     "HTMX_VENDORED_VERSION",
+    "PICO_VENDORED_SHA256",
+    "PICO_VENDORED_VERSION",
     "ROUTE_INDEX",
     "ROUTE_IMPORT_REPLAY",
     "ROUTE_IMPORT_SKIPS",

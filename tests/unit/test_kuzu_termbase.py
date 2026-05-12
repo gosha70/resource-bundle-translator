@@ -411,3 +411,33 @@ def test_attach_concept_to_segment_creates_segment_node(tb: KuzuTermbase) -> Non
     # No assertion on edge count (the Protocol does not surface that)
     # — the test pins the no-error idempotency contract; S5 will
     # exercise the read side.
+
+
+def test_locked_termbase_raises_friendly_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Cycle-5 cooldown polish — when Kuzu raises a ``Could not set lock``
+    error (which only happens across processes since the lock is file-
+    level), `KuzuTermbase.__init__` must wrap it into
+    :class:`TermbaseLockedError` with an operator-friendly message naming
+    `nemo app run` as the likely lock-holder. Mocks the Kuzu Database
+    constructor so the test exercises the wrap logic without needing a
+    subprocess.
+    """
+    import kuzu
+
+    from ainemo.core.termbase.kuzu.store import TermbaseLockedError
+
+    def _raise_lock_error(*args: object, **kwargs: object) -> object:
+        raise RuntimeError(f"IO exception: Could not set lock on file : {tmp_path}/termbase.kuzu")
+
+    monkeypatch.setattr(kuzu, "Database", _raise_lock_error)
+
+    with pytest.raises(TermbaseLockedError) as excinfo:
+        KuzuTermbase(tmp_path / "termbase.kuzu")
+    msg = str(excinfo.value)
+    assert "locked by another process" in msg
+    assert "nemo app run" in msg
+    # The original Kuzu RuntimeError must be chained via __cause__.
+    assert isinstance(excinfo.value.__cause__, RuntimeError)
+    assert "Could not set lock" in str(excinfo.value.__cause__)

@@ -214,20 +214,111 @@ def _augment(
 
 @blueprint.get("/promote")
 def promote_queue() -> str:
-    """Render the full candidate queue for the requested language pair."""
+    """Render the candidate queue for the requested language pair.
+
+    Optional query params for cooldown-extension threshold tuning:
+      * ``min_frequency`` (int, defaults to algorithm default of 5)
+      * ``min_consistency`` (float in [0, 1], defaults to 0.9)
+
+    When the queue is empty AND the TM has rows for *other* language
+    pairs, the template renders a "try these lang pairs instead" hint
+    derived from a TM scan. That guards against the dogfood-discovered
+    case where ``nemo translate`` infers ``source_lang=en-US`` from the
+    filename's locale convention, but ``/promote`` is queried with the
+    page-default ``?source_lang=en``.
+    """
+    from ainemo.core.termbase._ids import (
+        DEFAULT_PROMOTION_CONSISTENCY_MIN,
+        DEFAULT_PROMOTION_FREQUENCY_MIN,
+    )
+
     ext = current_app.extensions["ainemo"]
     source_lang: str = request.args.get("source_lang", _DEFAULT_SOURCE_LANG)
     target_lang: str = request.args.get("target_lang", _DEFAULT_TARGET_LANG)
 
-    candidates = find_candidates(ext.tm, source_lang, target_lang)
+    min_frequency = _parse_positive_int(
+        request.args.get("min_frequency"), default=DEFAULT_PROMOTION_FREQUENCY_MIN
+    )
+    min_consistency = _parse_unit_float(
+        request.args.get("min_consistency"), default=DEFAULT_PROMOTION_CONSISTENCY_MIN
+    )
+
+    candidates = find_candidates(
+        ext.tm,
+        source_lang,
+        target_lang,
+        min_frequency=min_frequency,
+        min_consistency=min_consistency,
+    )
     augmented = tuple(_augment(c, tm=ext.tm, tb=ext.termbase) for c in candidates)
+
+    # Empty-state hint: when the queried pair has no candidates but the
+    # TM has rows for OTHER (source_lang, target_lang) pairs, surface
+    # those pairs in the template so the operator can spot the dogfood
+    # `en` vs `en-US` mismatch class.
+    available_pairs: tuple[tuple[str, str], ...] = ()
+    if not augmented:
+        available_pairs = _distinct_lang_pairs(ext.tm)
 
     return render_template(
         "promote/list.html",
         augmented_candidates=augmented,
         source_lang=source_lang,
         target_lang=target_lang,
+        min_frequency=min_frequency,
+        min_consistency=min_consistency,
+        available_pairs=available_pairs,
     )
+
+
+def _parse_positive_int(raw: str | None, *, default: int) -> int:
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return default
+    return value if value >= 1 else default
+
+
+def _parse_unit_float(raw: str | None, *, default: float) -> float:
+    if raw is None:
+        return default
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return default
+    return value if 0.0 <= value <= 1.0 else default
+
+
+def _distinct_lang_pairs(tm: object) -> tuple[tuple[str, str], ...]:
+    """Return distinct (source_lang, target_lang) pairs seen in the TM.
+
+    Reads via the cycle-1 Protocol surface; if the impl doesn't expose
+    bulk iteration without a pair filter, fall back to an empty tuple
+    (the hint just won't render).
+    """
+    from ainemo.core.tm.base import TranslationMemory
+
+    if not isinstance(tm, TranslationMemory):
+        return ()
+    iter_all = getattr(tm, "iter_all_translations", None)
+    if iter_all is None:
+        # Cycle-1 Protocol has no bulk iterator without lang filtering;
+        # peek at the SQLite-backed default impl as a best-effort fallback.
+        conn = getattr(tm, "_conn", None)
+        if conn is None:
+            return ()
+        try:
+            cursor = conn.execute(
+                "SELECT DISTINCT s.source_lang, t.target_lang "
+                "FROM segments s JOIN translations t ON t.fingerprint = s.fingerprint "
+                "ORDER BY s.source_lang, t.target_lang"
+            )
+            return tuple((str(r[0]), str(r[1])) for r in cursor.fetchall())
+        except Exception:
+            return ()
+    return tuple((str(s), str(t)) for s, t in iter_all())
 
 
 @blueprint.post("/promote/decide")

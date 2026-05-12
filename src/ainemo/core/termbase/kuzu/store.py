@@ -73,6 +73,17 @@ _WORD_BOUNDARIES: Final = " \t\n\r.,;:!?\"'()[]{}<>/\\|*+-_="
 _DEFAULT_MAX_HITS: Final = 16
 
 
+class TermbaseLockedError(RuntimeError):
+    """Raised when Kuzu's single-writer lock blocks termbase construction.
+
+    Cycle-5 cooldown polish: Kuzu surfaces a generic ``RuntimeError``
+    ("Could not set lock on file") when another process already holds
+    the termbase. The reviewer app (``nemo app run``) is the most
+    common lock-holder; this wrapper names that explicitly so the
+    operator doesn't have to read Kuzu's concurrency docs to diagnose.
+    """
+
+
 class KuzuTermbase:
     """Concrete Kuzu-backed :class:`~ainemo.core.termbase.base.Termbase`.
 
@@ -88,7 +99,23 @@ class KuzuTermbase:
         # Kuzu Database accepts str; the type stubs (when present)
         # may type the arg loosely so we coerce explicitly.
         self._path = path
-        self._db = kuzu.Database(str(path))
+        try:
+            self._db = kuzu.Database(str(path))
+        except RuntimeError as exc:
+            # Cycle-5 cooldown polish: Kuzu raises a generic RuntimeError
+            # ("Could not set lock on file") when another process already
+            # holds the termbase's single-writer lock — most commonly the
+            # `nemo app run` reviewer app from a separate terminal. Wrap
+            # with an operator-friendly hint so the user doesn't have to
+            # read https://docs.kuzudb.com/concurrency to diagnose.
+            if "Could not set lock" in str(exc) or "lock" in str(exc).lower():
+                raise TermbaseLockedError(
+                    f"Termbase at {path} is locked by another process. "
+                    f"If `nemo app run` is running in another terminal, "
+                    f"stop it first (Kuzu allows one writer at a time). "
+                    f"Original error: {exc}"
+                ) from exc
+            raise
         self._conn = kuzu.Connection(self._db)
         self._init_schema()
 
@@ -653,4 +680,4 @@ def make_default_termbase(path: Path | None = None) -> KuzuTermbase:
     return KuzuTermbase(path or Path(DEFAULT_TERMBASE_PATH))
 
 
-__all__ = ["KuzuTermbase", "make_default_termbase"]
+__all__ = ["KuzuTermbase", "TermbaseLockedError", "make_default_termbase"]
