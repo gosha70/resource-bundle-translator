@@ -102,3 +102,34 @@ def test_sqlite_store_update_retry_failure_updates_reason(tmp_path: Path) -> Non
         assert updated.last_retried_at is not None
     finally:
         store.close()
+
+
+def test_store_works_across_threads(tmp_path: Path) -> None:
+    """Cycle-5 dogfood regression — the reviewer Flask app shares one
+    SqliteImportSkipStore across werkzeug worker threads. Without
+    `check_same_thread=False`, the second-thread call would raise
+    ``sqlite3.ProgrammingError: SQLite objects created in a thread can
+    only be used in that same thread``."""
+    import threading
+
+    store = SqliteImportSkipStore(tmp_path / "skips.db")
+    store.add(_row())
+
+    listed: list[tuple[ImportSkipRow, ...]] = []
+    error: list[BaseException] = []
+
+    def _worker() -> None:
+        try:
+            listed.append(store.list())
+        except BaseException as exc:  # noqa: BLE001
+            error.append(exc)
+
+    t = threading.Thread(target=_worker)
+    t.start()
+    t.join(timeout=5.0)
+
+    assert not error, f"store.list raised on worker thread: {error[0]!r}"
+    assert len(listed) == 1
+    assert len(listed[0]) == 1
+
+    store.close()

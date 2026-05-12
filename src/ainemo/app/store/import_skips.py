@@ -201,7 +201,12 @@ class SqliteImportSkipStore:
 
     def __init__(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(path))
+        # `check_same_thread=False` so the cycle-5 reviewer Flask app
+        # (threaded werkzeug dev server) can share one store across
+        # worker threads. Concurrent access is serialized by SQLite's
+        # own per-connection lock; the single-user-localhost audience
+        # makes write contention minimal.
+        self._conn = sqlite3.connect(str(path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._bootstrap()
 

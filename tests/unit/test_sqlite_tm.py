@@ -566,3 +566,41 @@ def test_iter_translations_streams_without_materializing(tmp_path: Path) -> None
 
     tm._conn = real_conn
     tm.close()
+
+
+def test_iter_translations_works_across_threads(tmp_path: Path) -> None:
+    """Cycle-5 dogfood regression — the cycle-5 reviewer Flask app runs
+    requests on werkzeug worker threads, but `SqliteTranslationMemory`
+    holds a long-lived `sqlite3.Connection` opened on a different thread.
+    Without `check_same_thread=False`, the second-thread call raises
+    ``sqlite3.ProgrammingError: SQLite objects created in a thread can
+    only be used in that same thread``.
+
+    This regression seeds a TM on the main thread, then iterates from a
+    worker thread; pre-fix this raised ProgrammingError, post-fix it
+    yields the seeded rows.
+    """
+    import threading
+
+    tm = SqliteTranslationMemory(tmp_path / "tm.sqlite")
+    seg = _seg(key="k1", source_text="Hello world")
+    tm.store(_ts(seg, target_text="Hallo welt"))
+
+    rows: list[TranslatedSegment] = []
+    error: list[BaseException] = []
+
+    def _worker() -> None:
+        try:
+            rows.extend(tm.iter_translations(source_lang=_LANG_EN_US, target_lang=_LANG_DE))
+        except BaseException as exc:  # noqa: BLE001
+            error.append(exc)
+
+    t = threading.Thread(target=_worker)
+    t.start()
+    t.join(timeout=5.0)
+
+    assert not error, f"iter_translations raised on worker thread: {error[0]!r}"
+    assert len(rows) == 1
+    assert rows[0].target_text == "Hallo welt"
+
+    tm.close()

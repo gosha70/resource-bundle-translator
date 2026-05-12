@@ -142,7 +142,14 @@ class SqliteTranslationMemory:
         self._db_path = db_path
         self._embedder = embedder
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(db_path), isolation_level=None)
+        # `check_same_thread=False` lets the cycle-5 reviewer Flask app
+        # share a single SqliteTranslationMemory across worker threads
+        # (werkzeug's dev server is threaded by default). Concurrent
+        # access is serialized by SQLite's own per-connection lock, and
+        # the cycle-5 audience is single-user-localhost so contention
+        # is minimal. The cycle-1 CLI use-case (single-thread) is
+        # unaffected.
+        self._conn = sqlite3.connect(str(db_path), isolation_level=None, check_same_thread=False)
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._init_schema()
 
