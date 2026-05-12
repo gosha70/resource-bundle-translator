@@ -2,7 +2,7 @@
 pitch_id: 0005-reviewer-ui-qa-layer
 title: "Cycle 5 — Reviewer Web UI + QA Layer"
 appetite: 6w
-bet_status: building
+bet_status: shipped
 cycle: "05"
 circuit_breaker: "If the QA Layer (S5 — back-translation behind opt-in flag + cheap-signal confidence scoring) is still uphill at week 4, ship the reviewer UI without back-translation: the auto-promotion queue (S2), import-skip queue (S3), termbase curation (S4), persona inspector (S6), and cheap-signal confidence display (subset of S5) are core; back-translation moves to cycle-5 cooldown or cycle-6. The reviewer UI is the moat-builder for cycle 5; back-translation is a nice-to-have."
 shaped_by: gosha70
@@ -394,3 +394,4 @@ Context for "exhausted" on this pitch: S5's back-translation is the most novel s
 | 2026-05-07 | refined | Pre-/bet review surfaced four findings. (P1) `ImportSkipStore` could not preserve the original CSV/JSONL row payload because `SkippedRow` is `(reason: str)` only; fix: S3 explicitly scopes a four-field additive Protocol extension to `SkippedRow` with defaulted-`None` byte-stability for cycle-4 callers. (P2) Back-translation referenced `ProviderRouter` / `UsageLog` APIs that do not exist; fix: S5 explicitly scopes `ProviderRouter.translate_with` + `list_registered` and `UsageLog.estimate_for` as additive cycle-2 surface additions with their own unit tests + cycle-2 contract-test extensions. (P2) S1 allowed a CDN-pinned HTMX script tag, conflicting with local-first / no-phone-home; fix: S1 now requires a vendored `app/static/htmx.min.js` with SHA-256 pin in `_ids.py`, and the smoke test asserts Flask serves it locally. (P3) `cycle:` frontmatter was blank; set to `"05"`. S3 estimate raised 90→120 min; S5 estimate raised 90→120 min; total session-execution estimate raised ~7–8h → ~9h. No scope-count change. |
 | 2026-05-07 | bet | Bet for cycle 05. |
 | 2026-05-07 | building | /cycle-start: hill.json initialized with all 7 scopes uphill (S1–S7); bet_status flipped bet → building. Cycle 05 is open for execution. |
+| 2026-05-11 | shipped | Cycle 05 closed. All 7/7 scopes done: Flask scaffolding + /promote queue + /imports queue + ImportSkipStore + /termbase curation + Termbase.update_term + /qa layer (cheap signals + back-translation opt-in) + /personas inspector + build_glossary_block extraction + docs (PRs #21-#27). Manual dogfood verified the five views; surfaced one threading bug (fixed in cooldown-window commit a6a553e) and 4 additional findings filed in cooldown-after-05.md. |

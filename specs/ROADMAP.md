@@ -33,7 +33,7 @@ The defensible product is the **intersection of all four**, plus a CC0/CC-BY-onl
 
 ## Cycle plan
 
-Each cycle below is a single Shape-Up bet. Cycles 0–4 are shipped; 5 onward is provisional and will be re-shaped before betting.
+Each cycle below is a single Shape-Up bet. Cycles 0–5 are shipped; 6 onward is provisional and will be re-shaped before betting.
 
 | # | Title | Appetite | Status | Goal in one line |
 |---|---|---|---|---|
@@ -42,7 +42,7 @@ Each cycle below is a single Shape-Up bet. Cycles 0–4 are shipped; 5 onward is
 | 2 | Provider Abstraction + Gradle Plugin | 6w | **shipped** (PR #7 merged 2026-05-05; retro: [`retros/cycle-2.md`](retros/cycle-2.md)) | Pluggable LLM providers (Anthropic + Ollama added) + first Gradle plugin for JVM `.properties`. |
 | 3 | Concept-Oriented Termbase via Kuzu | 6w | **shipped** (PRs #8/#9/#10/#11/#12/#13 merged 2026-05-06; pitch: [`pitches/0003-kuzu-termbase/pitch.md`](pitches/0003-kuzu-termbase/pitch.md); retro: see cooldown) | Concept/Term/Domain/Persona graph in Kuzu, TBX 3.0 round-trip, three starter personas, auto-promotion CLI, pipeline + daemon persona injection. |
 | 4 | Pluggable Termbase Importer Pipeline | 2w | **shipped** (PRs #15/#16/#17/#18/#19/#20 merged 2026-05-07; pitch: [`pitches/0004-termbase-importer-pipeline/pitch.md`](pitches/0004-termbase-importer-pipeline/pitch.md); retro: [`retros/cooldown-after-04.md`](retros/cooldown-after-04.md)) | `TermbaseSource` Protocol, `CsvSource` + `JsonLinesSource`, `nemo termbase import-from-csv` + `import-from-jsonl` CLI, namespace-aware content-addressed concept ids. Reshaped at /bet from `0004-legal-en-pack` against audience-fit pushback (legal-en pack served <5%; importer serves the 90%+). |
-| 5 | Reviewer Web UI + QA Layer | 6w | stub | Auto-promotion review queue, confidence scoring, back-translation QA. |
+| 5 | Reviewer Web UI + QA Layer | 6w | **shipped** (PRs #21/#22/#23/#24/#25/#26/#27 merged 2026-05-11; pitch: [`pitches/0005-reviewer-ui-qa-layer/pitch.md`](pitches/0005-reviewer-ui-qa-layer/pitch.md); retro: [`retros/cooldown-after-05.md`](retros/cooldown-after-05.md)) | Flask app with five HTMX-driven views (`/promote`, `/imports`, `/termbase`, `/personas`, `/qa`), `ImportSkipStore`, `Termbase.update_term`, QA layer (cheap signals + back-translation opt-in), `nemo app run` CLI. |
 | 6 | Multi-Platform Expansion | 6w | stub | Maven plugin, npm plugin, `.xcstrings` and Fluent adapters. |
 | 7+ | Additional domain packs | recurring | future | medical-en (MeSH), aerospace-en, finance-en (IATE finance subset). |
 
@@ -156,11 +156,19 @@ Eight reviewer-validated bug fixes landed mid-cycle, every one with a regression
 
 **Scope-hammered out**: pre-built `legal-en` / `medical-en` / etc. packs (cycle 7+, content-only, demand-driven), data redistribution from AI-NEMO (importer-only design — license terms apply to the user's data, not to AI-NEMO), SPARQL / RDF / SKOS / IATE-XML / proprietary-CAT-tool source formats (cycle 7+ if asked), Wikidata QID enrichment (cycle 7+ if asked), CSV header auto-detection (rejected at shaping — explicit `--map-config` is more honest).
 
-## Cycle 5 — Reviewer Web UI + QA Layer (6 weeks)
+## Cycle 5 — Reviewer Web UI + QA Layer (shipped)
 
-**Provisional outcome**: Minimal Flask + HTMX (or React) UI for: (a) approving auto-promotion candidates, (b) curating personas, (c) reviewing low-confidence segments, (d) seeing translation provenance (which model, which persona, which termbase entries fired). Confidence scoring per segment. Back-translation QA pass with a different provider for high-stakes domains.
+**Pitch**: [pitches/0005-reviewer-ui-qa-layer/pitch.md](pitches/0005-reviewer-ui-qa-layer/pitch.md) — status `shipped`.
+**Retro**: folded into [retros/cooldown-after-05.md](retros/cooldown-after-05.md) § "Cycle 5 — what shipped".
+**Shipped**: 2026-05-11 via PRs [#21](https://github.com/gosha70/resource-bundle-translator/pull/21) (S1: Flask app scaffolding + DI factory + `nemo app run` CLI), [#22](https://github.com/gosha70/resource-bundle-translator/pull/22) (S2: `/promote` queue + shared `write_accepted_candidate` helper), [#23](https://github.com/gosha70/resource-bundle-translator/pull/23) (S3: `/imports` + `ImportSkipStore` + `SkippedRow` payload extension), [#24](https://github.com/gosha70/resource-bundle-translator/pull/24) (S4: `/termbase` curation + `Termbase.update_term`), [#25](https://github.com/gosha70/resource-bundle-translator/pull/25) (S5: `/qa` cheap signals + back-translation opt-in), [#26](https://github.com/gosha70/resource-bundle-translator/pull/26) (S6: `/personas` inspector + `build_glossary_block` extraction), and [#27](https://github.com/gosha70/resource-bundle-translator/pull/27) (S7: docs).
+
+All 7 scopes landed inside the 6-week appetite (actual session execution: hours). Cycle 5 ships the **reviewer web UI + QA layer** — a Flask app under `src/ainemo/app/` with five HTMX-driven views (auto-promotion candidate queue, import-skip queue with retry-on-edit, termbase curation with TBX quick-export, persona inspector with hit-preview, QA confidence display with opt-in back-translation), a SQLite-backed `ImportSkipStore` preserving the original CSV/JSONL row payloads for retry, four additive Protocol surfaces (`Termbase.update_term`, `ProviderRouter.translate_with` + `list_registered`, `UsageLog.estimate_for` + `estimate_tokens_from_chars`, `SkippedRow` payload extension), two refactor-extractions (`core/termbase/promotion.py:write_accepted_candidate` shared by CLI + UI; `core/termbase/persona_glue.py:build_glossary_block` shared by pipeline + UI), a vendored SHA-256-pinned `htmx.min.js` (no CDN — local-first / no-phone-home), the `nemo app run` CLI, and full reference docs ([`docs/reviewer-ui.md`](../docs/reviewer-ui.md), [`docs/qa-layer.md`](../docs/qa-layer.md)).
+
+Eight reviewer-validated bug fixes landed mid-cycle, every one with a regression test (full table at [`retros/cooldown-after-05.md`](retros/cooldown-after-05.md) § "Reviewer-validated fixes"). Cooldown landed one additional fix (`a6a553e` — `check_same_thread=False` on the two SQLite-backed stores; Werkzeug threaded request handling surfaced the bug, the synchronous Flask test client did not). Manual dogfood during the cooldown window surfaced four UX-shape findings filed as cycle-6+ candidates (see retro § "Cooldown-window findings").
 
 **Why now and not earlier**: the UI is only useful once there's enough TM + termbase + provider data to curate. Building it before cycle 3 = building a UI for a flat list, which doesn't justify the surface area.
+
+**Scope-hammered out**: React / Vue / SPA frontend (HTMX + Jinja only — no Node toolchain in CI), real-time / WebSocket / SSE (single-user-localhost), multi-tenant SaaS / hosted reviewer service (local-first), translation execution from the UI (UI is read/curate/approve only; back-translation in S5 is the sole provider call), multi-user basic-auth (deferred — single-user-localhost default; companion pitch for cycle 6), persona editing UI (read-only inspector only — editing is a deployment / packaging question deferred to cycle 6+ if real users ask).
 
 ## Cycle 6 — Multi-Platform Expansion (6 weeks)
 

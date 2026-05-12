@@ -51,3 +51,10 @@ tests/benchmarks/results/
 gradle-plugin/.gradle/
 gradle-plugin/build/
 gradle-plugin/.kotlin/
+
+# --- doc_internal/ ---
+# Per the global agent manifest convention: internal reference docs
+# (session notes, manual test plans, working drafts) live here and stay
+# local-only. Promote individual artifacts into specs/ or docs/ if they
+# graduate from "private working layer" to "team-shared context."
+doc_internal/
